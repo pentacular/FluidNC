@@ -21,6 +21,7 @@
 #include "../Pin.h"
 #include "../Limits.h"  // limitsMaxPosition
 #include "../NutsBolts.h"
+#include <math.h>
 
 namespace MotorDrivers {
 
@@ -36,10 +37,12 @@ namespace MotorDrivers {
         read_settings();
         config_message();
 
-        _pwm_chan_num     = ledcInit(_output_pin, -1, double(_pwm_freq), calc_pwm_precision(_pwm_freq));  // Allocate a channel
+        _pwm_chan_num     = ledcInit(_output_pin, -1, double(_pwm_freq), _pwm_precision);  // Allocate a channel
         _current_pwm_duty = 0;
 
         _disabled = true;
+
+        startUpdateTask(_timer_ms);
     }
 
     /*
@@ -62,7 +65,11 @@ namespace MotorDrivers {
         return precision - 1;
     }
 
-    void Solenoid::config_message() { log_info("    Solenoid Pin:" << _output_pin.name() << ")"); }
+    void Solenoid::config_message() {
+        log_info("    Solenoid " << _output_pin.name() << " peak:" << _peak_duty << "%/" << _peak_ms << "ms hold:" << _hold_duty
+                                 << "% freq:" << _pwm_freq);
+        log_info("    Precision:" << _pwm_precision << " Peak cnt:" << _peak_pulse_cnt << " hold cnt:" << _hold_pulse_cnt);
+    }
 
     void Solenoid::_write_pwm(uint32_t duty) {
         // to prevent excessive calls to ledcWrite, make sure duty has changed
@@ -76,11 +83,11 @@ namespace MotorDrivers {
 
     // sets the PWM to zero. This allows most servos to be manually moved
     void IRAM_ATTR Solenoid::set_disable(bool disable) {
-        //log_info("Set dsbl " << disable);
         if (_has_errors)
             return;
 
         _disabled = disable;
+
         if (_disabled) {
             _write_pwm(0);
         }
@@ -88,36 +95,59 @@ namespace MotorDrivers {
 
     // Homing justs sets the new system position and the servo will move there
     bool Solenoid::set_homing_mode(bool isHoming) {
-        //log_info("Servo homing:" << isHoming);
         if (_has_errors)
             return false;
 
         if (isHoming) {
             auto axis                = config->_axes->_axis[_axis_index];
             motor_steps[_axis_index] = mpos_to_steps(axis->_homing->_mpos, _axis_index);
-            _disabled = false;
+            _disabled                = false;
             set_location();  // force the PWM to update now
         }
         return false;  // Cannot be homed in the conventional way
     }
 
-    void IRAM_ATTR Solenoid::step() {
-        
-    }
+    void Solenoid::update() { set_location(); }
 
     void Solenoid::set_location() {
+        uint32_t solenoid_pulse_len = 0;  //
+
         if (_disabled || _has_errors) {
             return;
         }
 
-        uint32_t solenoid_pulse_len;
+        float mpos = steps_to_mpos(motor_steps[_axis_index], _axis_index);  // get the axis machine position in mm
 
-        read_settings();
+                read_settings();
+
+        if (mpos > 0.0) {
+            if (_last_mpos > 0.0) {  // we were up
+                if (esp_timer_get_time() > _peak_end_time_ticks) {
+                    // use hold level
+                    solenoid_pulse_len = _hold_pulse_cnt;
+                } else {
+                    solenoid_pulse_len = _peak_pulse_cnt;
+                }
+            } else {
+                solenoid_pulse_len   = _peak_pulse_cnt;
+                _peak_end_time_ticks = esp_timer_get_time() + (1000 * _peak_ms);
+            }
+        } else {
+            solenoid_pulse_len = 0;
+        }
+
+        _last_mpos = mpos;
 
         _write_pwm(solenoid_pulse_len);
     }
 
-    void Solenoid::read_settings() {}
+    void Solenoid::read_settings() {
+        uint32_t max_cnt = pow(2, _pwm_precision);
+
+        _pwm_precision  = calc_pwm_precision(_pwm_freq);
+        _peak_pulse_cnt = float(max_cnt) * (_peak_duty / 100.0);
+        _hold_pulse_cnt = float(max_cnt) * (_hold_duty / 100.0);
+    }
 
     // Configuration registration
     namespace {
