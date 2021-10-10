@@ -14,7 +14,7 @@
 
 #    include <WiFi.h>
 #    include <FS.h>
-#    include <SPIFFS.h>
+#    include <LittleFS.h>
 #    include "WifiServices.h"
 #    include <ESPmDNS.h>
 #    include <ArduinoOTA.h>
@@ -40,10 +40,10 @@ namespace WebUI {
                 String type;
                 if (ArduinoOTA.getCommand() == U_FLASH) {
                     type = "sketch";
-                } else {  // U_SPIFFS
-                    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
+                } else {  // U_LittleFS
+                    // NOTE: if updating LittleFS this would be the place to unmount LittleFS using LittleFS.end()
                     type = "filesystem";
-                    SPIFFS.end();
+                    LittleFS.end();
                 }
                 log_info("Start OTA updating " << type);
             })

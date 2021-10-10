@@ -17,7 +17,7 @@ WebUI::WiFiConfig wifi_config;
 #    include <esp_wifi.h>
 #    include <ESPmDNS.h>
 #    include <FS.h>
-#    include <SPIFFS.h>
+#    include <LittleFS.h>
 #    include <cstring>
 
 namespace WebUI {

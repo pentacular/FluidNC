@@ -24,7 +24,7 @@ FileStream::FileStream(const char* filename, const char* defaultFs) {
 
     // Map /localfs/ to the actual name of the local file system
     if (path.startsWith("/localfs/")) {
-        path.replace("/localfs/", "/spiffs/");
+        path.replace("/localfs/", "/littlefs/");
     }
     if (path.startsWith("/sd/")) {
         if (config->_sdCard->begin(SDCard::State::BusyWriting) != SDCard::State::Idle) {

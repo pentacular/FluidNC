@@ -24,7 +24,7 @@
 #    include "WebUI/WifiConfig.h"
 #    include <WiFi.h>
 #endif
-#include <SPIFFS.h>
+#include <LittleFS.h>
 
 extern void make_user_commands();
 
@@ -52,7 +52,7 @@ void setup() {
         log_info("FluidNC " << git_info);
         log_info("Compiled with ESP32 SDK:" << ESP.getSdkVersion());
 
-        if (!SPIFFS.begin(true)) {
+        if (!LittleFS.begin(true)) {
             log_error("Cannot mount the local filesystem");
         }
 

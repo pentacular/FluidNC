@@ -33,7 +33,7 @@
 #endif
 
 #include <FS.h>
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <SD.h>
 
 namespace WebUI {
@@ -246,20 +246,20 @@ namespace WebUI {
         return Error::Ok;
     }
 
-    static Error SPIFFSSize(char* parameter, AuthenticationLevel auth_level) {  // ESP720
+    static Error LittleFSSize(char* parameter, AuthenticationLevel auth_level) {  // ESP720
         webPrint(parameter);
-        webPrint("SPIFFS  Total:", formatBytes(SPIFFS.totalBytes()));
-        webPrintln(" Used:", formatBytes(SPIFFS.usedBytes()));
+        webPrint("LittleFS  Total:", formatBytes(LittleFS.totalBytes()));
+        webPrintln(" Used:", formatBytes(LittleFS.usedBytes()));
         return Error::Ok;
     }
 
-    static Error formatSpiffs(char* parameter, AuthenticationLevel auth_level) {  // ESP710
+    static Error formatLocalFS(char* parameter, AuthenticationLevel auth_level) {  // ESP710
         if (strcmp(parameter, "FORMAT") != 0) {
             webPrintln("Parameter must be FORMAT");
             return Error::InvalidValue;
         }
         webPrint("Formatting");
-        SPIFFS.format();
+        LittleFS.format();
         webPrintln("...Done");
         return Error::Ok;
     }
@@ -273,11 +273,11 @@ namespace WebUI {
         if ((path.length() > 0) && (path[0] != '/')) {
             path = "/" + path;
         }
-        if (!SPIFFS.exists(path)) {
+        if (!LittleFS.exists(path)) {
             webPrintln("Error: No such file!");
             return Error::FsFileNotFound;
         }
-        File currentfile = SPIFFS.open(path, FILE_READ);
+        File currentfile = LittleFS.open(path, FILE_READ);
         if (!currentfile) {  //if file open success
             return Error::FsFailedOpenFile;
         }
@@ -309,11 +309,11 @@ namespace WebUI {
         if ((path.length() > 0) && (path[0] != '/')) {
             path = "/" + path;
         }
-        if (!SPIFFS.exists(path)) {
+        if (!LittleFS.exists(path)) {
             webPrintln("Error: No such file!");
             return Error::FsFileNotFound;
         }
-        File currentfile = SPIFFS.open(path, FILE_READ);
+        File currentfile = LittleFS.open(path, FILE_READ);
         if (!currentfile) {
             return Error::FsFailedOpenFile;
         }
@@ -426,7 +426,7 @@ namespace WebUI {
                 }
             }
             webPrintln("Available Size for update: ", formatBytes(flashsize));
-            webPrintln("Available Size for SPIFFS: ", formatBytes(SPIFFS.totalBytes()));
+            webPrintln("Available Size for LittleFS: ", formatBytes(LittleFS.totalBytes()));
 
             webPrintln("Web port: ", String(web_server.port()));
             webPrintln("Data port: ", String(telnet_server.port()));
@@ -826,14 +826,14 @@ namespace WebUI {
         }
     }
 
-    static Error deleteLocalFile(char* parameter, AuthenticationLevel auth_level) { return deleteObject(SPIFFS, parameter); }
+    static Error deleteLocalFile(char* parameter, AuthenticationLevel auth_level) { return deleteObject(LittleFS, parameter); }
 
     static Error listLocalFiles(char* parameter, AuthenticationLevel auth_level) {  // No ESP command
         webPrintln("");
-        listDirLocalFS(SPIFFS, "/", 10, *webresponse);
-        String ssd = "[Local FS Free:" + formatBytes(SPIFFS.totalBytes() - SPIFFS.usedBytes());
-        ssd += " Used:" + formatBytes(SPIFFS.usedBytes());
-        ssd += " Total:" + formatBytes(SPIFFS.totalBytes());
+        listDirLocalFS(LittleFS, "/", 10, *webresponse);
+        String ssd = "[Local FS Free:" + formatBytes(LittleFS.totalBytes() - LittleFS.usedBytes());
+        ssd += " Used:" + formatBytes(LittleFS.usedBytes());
+        ssd += " Total:" + formatBytes(LittleFS.totalBytes());
         ssd += "]";
         webPrintln(ssd);
         return Error::Ok;
@@ -863,11 +863,11 @@ namespace WebUI {
         JSONencoder j(false, webresponse);
         j.begin();
         j.begin_array("files");
-        listDirJSON(SPIFFS, "/", 4, &j);
+        listDirJSON(LittleFS, "/", 4, &j);
         j.end_array();
-        j.member("total", SPIFFS.totalBytes());
-        j.member("used", SPIFFS.usedBytes());
-        j.member("occupation", String(100 * SPIFFS.usedBytes() / SPIFFS.totalBytes()));
+        j.member("total", LittleFS.totalBytes());
+        j.member("used", LittleFS.usedBytes());
+        j.member("occupation", String(100 * LittleFS.usedBytes() / LittleFS.totalBytes()));
         j.end();
         return Error::Ok;
     }
@@ -1168,8 +1168,8 @@ namespace WebUI {
         new WebCommand("RESTART", WEBCMD, WA, "ESP444", "System/Control", setSystemMode);
         new WebCommand("RESTART", WEBCMD, WA, NULL, "Bye", restart);
 
-        new WebCommand(NULL, WEBCMD, WU, "ESP720", "LocalFS/Size", SPIFFSSize);
-        new WebCommand("FORMAT", WEBCMD, WA, "ESP710", "LocalFS/Format", formatSpiffs);
+        new WebCommand(NULL, WEBCMD, WU, "ESP720", "LocalFS/Size", LittleFSSize);
+        new WebCommand("FORMAT", WEBCMD, WA, "ESP710", "LocalFS/Format", formatLocalFS);
         new WebCommand("path", WEBCMD, WU, "ESP701", "LocalFS/Show", showLocalFile);
         new WebCommand("path", WEBCMD, WU, "ESP700", "LocalFS/Run", runLocalFile);
         new WebCommand("path", WEBCMD, WU, NULL, "LocalFS/List", listLocalFiles);

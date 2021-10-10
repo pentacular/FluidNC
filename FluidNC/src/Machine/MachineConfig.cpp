@@ -18,7 +18,7 @@
 #include "../Configuration/ParseException.h"
 #include "../Config.h"  // ENABLE_*
 
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <cstdio>
 #include <cstring>
 #include <atomic>
@@ -126,11 +126,12 @@ namespace Machine {
             path = "/" + path;
         }
 
-        File file = SPIFFS.open(path, FILE_READ);
+        File file = LittleFS.open(path, FILE_READ);
 
+        // XXXWMB Check this for LittleFS
         // There is a subtle problem with the Arduino framework.  If
         // the framework does not find the file, it tries to open the
-        // path as a directory.  SPIFFS_opendir(... path ...) always
+        // path as a directory.  SPIFFSFS_opendir(... path ...) always
         // succeeds, regardless of what path is, hence the need to
         // check that it is not a directory.
 

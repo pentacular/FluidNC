@@ -68,7 +68,7 @@ namespace WebUI {
         static void handle_web_command() { _handle_web_command(false); }
         static void handle_web_command_silent() { _handle_web_command(true); }
         static void handle_Websocket_Event(uint8_t num, uint8_t type, uint8_t* payload, size_t length);
-        static void SPIFFSFileupload();
+        static void LittleFSFileupload();
         static void handleFileList();
         static void handleUpdate();
         static void WebUpdateUpload();
@@ -77,6 +77,7 @@ namespace WebUI {
         static void handle_direct_SDFileList();
         static void SDFile_direct_upload();
         static bool deleteRecursive(String path);
+        static bool deleteLittleFSRecursive(String path);
     };
 
     extern Web_Server web_server;

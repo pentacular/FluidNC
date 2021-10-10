@@ -18,7 +18,7 @@
 #    include <WebSocketsServer.h>
 #    include <WiFi.h>
 #    include <FS.h>
-#    include <SPIFFS.h>
+#    include <LittleFS.h>
 #    include <SD.h>
 #    include <WebServer.h>
 #    include <ESP32SSDP.h>
@@ -39,7 +39,7 @@ namespace WebUI {
 
 #    include <esp_ota_ops.h>
 
-//embedded response file if no files on SPIFFS
+//embedded response file if no files on LittleFS
 #    include "NoFile.h"
 
 namespace WebUI {
@@ -132,8 +132,8 @@ namespace WebUI {
         _webserver->on("/command", HTTP_ANY, handle_web_command);
         _webserver->on("/command_silent", HTTP_ANY, handle_web_command_silent);
 
-        //SPIFFS
-        _webserver->on("/files", HTTP_ANY, handleFileList, SPIFFSFileupload);
+        //LittleFS
+        _webserver->on("/files", HTTP_ANY, handleFileList, LittleFSFileupload);
 
         //web update
         _webserver->on("/updatefw", HTTP_ANY, handleUpdate, WebUpdateUpload);
@@ -223,13 +223,13 @@ namespace WebUI {
         String contentType = getContentType(path);
         String pathWithGz  = path + ".gz";
         //if have a index.html or gzip version this is default root page
-        if ((SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) && !_webserver->hasArg("forcefallback") &&
+        if ((LittleFS.exists(pathWithGz) || LittleFS.exists(path)) && !_webserver->hasArg("forcefallback") &&
             _webserver->arg("forcefallback") != "yes") {
-            if (SPIFFS.exists(pathWithGz)) {
+            if (LittleFS.exists(pathWithGz)) {
                 path = pathWithGz;
             }
 
-            File file = SPIFFS.open(path, FILE_READ);
+            File file = LittleFS.open(path, FILE_READ);
             _webserver->streamFile(file, contentType);
             file.close();
             return;
@@ -240,7 +240,7 @@ namespace WebUI {
         _webserver->send_P(200, "text/html", PAGE_NOFILES, PAGE_NOFILES_SIZE);
     }
 
-    //Handle not registred path on SPIFFS neither SD ///////////////////////
+    //Handle not registred path on LittleFS neither SD ///////////////////////
     void Web_Server::handle_not_found() {
         if (is_authenticated() == AuthenticationLevel::LEVEL_GUEST) {
             _webserver->sendContent_P("HTTP/1.1 301 OK\r\nLocation: /\r\nCache-Control: no-cache\r\n\r\n");
@@ -303,11 +303,11 @@ namespace WebUI {
             content += path;
             _webserver->send(404, "text/plain", content);
             return;
-        } else if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-            if (SPIFFS.exists(pathWithGz)) {
+        } else if (LittleFS.exists(pathWithGz) || LittleFS.exists(path)) {
+            if (LittleFS.exists(pathWithGz)) {
                 path = pathWithGz;
             }
-            File file = SPIFFS.open(path, FILE_READ);
+            File file = LittleFS.open(path, FILE_READ);
             _webserver->streamFile(file, contentType);
             file.close();
             return;
@@ -338,11 +338,11 @@ namespace WebUI {
             path        = "/404.htm";
             contentType = getContentType(path);
             pathWithGz  = path + ".gz";
-            if (SPIFFS.exists(pathWithGz) || SPIFFS.exists(path)) {
-                if (SPIFFS.exists(pathWithGz)) {
+            if (LittleFS.exists(pathWithGz) || LittleFS.exists(path)) {
+                if (LittleFS.exists(pathWithGz)) {
                     path = pathWithGz;
                 }
-                File file = SPIFFS.open(path, FILE_READ);
+                File file = LittleFS.open(path, FILE_READ);
                 _webserver->streamFile(file, contentType);
                 file.close();
 
@@ -658,8 +658,8 @@ namespace WebUI {
         _webserver->send(200, "application/json", "{\"status\":\"Ok\",\"authentication_lvl\":\"admin\"}");
 #    endif
     }
-    //SPIFFS
-    //SPIFFS files list and file commands
+    //LittleFS
+    //LittleFS files list and file commands
     void Web_Server::handleFileList() {
         AuthenticationLevel auth_level = is_authenticated();
         if (auth_level == AuthenticationLevel::LEVEL_GUEST) {
@@ -704,10 +704,10 @@ namespace WebUI {
                 shortname.replace("/", "");
                 filename = path + _webserver->arg("filename");
                 filename.replace("//", "/");
-                if (!SPIFFS.exists(filename)) {
+                if (!LittleFS.exists(filename)) {
                     status = shortname + " does not exists!";
                 } else {
-                    if (SPIFFS.remove(filename)) {
+                    if (LittleFS.remove(filename)) {
                         status = shortname + " deleted";
                         //what happen if no "/." and no other subfiles ?
                         String ptmp = path;
@@ -715,11 +715,11 @@ namespace WebUI {
                             ptmp = path.substring(0, path.length() - 1);
                         }
 
-                        File dir        = SPIFFS.open(ptmp);
+                        File dir        = LittleFS.open(ptmp);
                         File dircontent = dir.openNextFile();
                         if (!dircontent) {
                             //keep directory alive even empty
-                            File r = SPIFFS.open(path + "/.", FILE_WRITE);
+                            File r = LittleFS.open(path + "/.", FILE_WRITE);
                             if (r) {
                                 r.close();
                             }
@@ -735,47 +735,38 @@ namespace WebUI {
                 String filename;
                 String shortname = _webserver->arg("filename");
                 shortname.replace("/", "");
-                filename = path + _webserver->arg("filename");
-                filename += "/";
+                filename = path + "/" + shortname;
                 filename.replace("//", "/");
                 if (filename != "/") {
-                    bool delete_error = false;
-                    File dir          = SPIFFS.open(path + shortname);
-                    {
-                        File file2deleted = dir.openNextFile();
-                        while (file2deleted) {
-                            String fullpath = file2deleted.name();
-                            if (!SPIFFS.remove(fullpath)) {
-                                delete_error = true;
-                                status       = "Cannot deleted ";
-                                status += fullpath;
-                            }
-                            file2deleted = dir.openNextFile();
+                    if (!LittleFS.exists(filename)) {
+                        status = shortname + " does not exist!";
+                    } else {
+                        if (!deleteLittleFSRecursive(filename)) {
+                            status = "Error deleting: ";
+                            status += shortname;
+                        } else {
+                            status = shortname;
+                            status += " deleted";
                         }
                     }
-                    if (!delete_error) {
-                        status = shortname;
-                        status += " deleted";
-                    }
+                } else {
+                    status = "Cannot delete root";
                 }
             }
-
             //create a directory
             if (_webserver->arg("action") == "createdir" && _webserver->hasArg("filename")) {
                 String filename;
-                filename         = path + _webserver->arg("filename") + "/.";
                 String shortname = _webserver->arg("filename");
+                filename         = path + shortname;
                 shortname.replace("/", "");
                 filename.replace("//", "/");
-                if (SPIFFS.exists(filename)) {
+                if (LittleFS.exists(filename)) {
                     status = shortname + " already exists!";
                 } else {
-                    File r = SPIFFS.open(filename, FILE_WRITE);
-                    if (!r) {
+                    if (!LittleFS.mkdir(filename)) {
                         status = "Cannot create ";
                         status += shortname;
                     } else {
-                        r.close();
                         status = shortname + " created";
                     }
                 }
@@ -783,70 +774,63 @@ namespace WebUI {
         }
 
         String jsonfile = "{";
-        String ptmp     = path;
-        if ((path != "/") && (path[path.length() - 1] = '/')) {
-            ptmp = path.substring(0, path.length() - 1);
-        }
-
-        File dir = SPIFFS.open(ptmp);
         jsonfile += "\"files\":[";
-        bool   firstentry = true;
-        String subdirlist = "";
-        File   fileparsed = dir.openNextFile();
-        while (fileparsed) {
-            String filename  = fileparsed.name();
-            String size      = "";
-            bool   addtolist = true;
-            //remove path from name
-            filename = filename.substring(path.length(), filename.length());
-            //check if file or subfile
-            if (filename.indexOf("/") > -1) {
-                //Do not rely on "/." to define directory as SPIFFS upload won't create it but directly files
-                //and no need to overload SPIFFS if not necessary to create "/." if no need
-                //it will reduce SPIFFS available space so limit it to creation
-                filename   = filename.substring(0, filename.indexOf("/"));
-                String tag = "*";
-                tag += filename + "*";
-                if (subdirlist.indexOf(tag) > -1 || filename.length() == 0) {  //already in list
-                    addtolist = false;                                         //no need to add
-                } else {
-                    size = "-1";  //it is subfile so display only directory, size will be -1 to describe it is directory
-                    if (subdirlist.length() == 0) {
-                        subdirlist += "*";
-                    }
-                    subdirlist += filename + "*";  //add to list
-                }
-            } else {
-                //do not add "." file
-                if (!((filename == ".") || (filename == ""))) {
-                    size = formatBytes(fileparsed.size());
-                } else {
-                    addtolist = false;
-                }
+
+        if (path != "/") {
+            path = path.substring(0, path.length() - 1);
+        }
+        if (path != "/" && !LittleFS.exists(path)) {
+            String s = "{\"status\":\" ";
+            s += path;
+            s += " does not exist on Local file system\"}";
+            _webserver->send(200, "application/json", s);
+            config->_sdCard->end();
+            return;
+        }
+        bool list_files = true;
+        if (list_files) {
+            File dir = LittleFS.open(path);
+            if (!dir.isDirectory()) {
+                dir.close();
             }
-            if (addtolist) {
-                if (!firstentry) {
+            dir.rewindDirectory();
+            File entry = dir.openNextFile();
+            int  i     = 0;
+            while (entry) {
+                COMMANDS::wait(1);
+                if (i > 0) {
                     jsonfile += ",";
-                } else {
-                    firstentry = false;
                 }
-                jsonfile += "{";
-                jsonfile += "\"name\":\"";
-                jsonfile += filename;
+                jsonfile += "{\"name\":\"";
+                String tmpname = entry.name();
+                int    pos     = tmpname.lastIndexOf("/");
+                tmpname        = tmpname.substring(pos + 1);
+                jsonfile += tmpname;
+                jsonfile += "\",\"shortname\":\"";  //No need here
+                jsonfile += tmpname;
                 jsonfile += "\",\"size\":\"";
-                jsonfile += size;
-                jsonfile += "\"";
-                jsonfile += "}";
+                if (entry.isDirectory()) {
+                    jsonfile += "-1";
+                } else {
+                    // files have sizes, directories do not
+                    jsonfile += formatBytes(entry.size());
+                }
+                jsonfile += "\",\"datetime\":\"";
+                //TODO - can be done later
+                jsonfile += "\"}";
+                i++;
+                entry.close();
+                entry = dir.openNextFile();
             }
-            fileparsed = dir.openNextFile();
+            dir.close();
         }
         jsonfile += "],";
         jsonfile += "\"path\":\"" + path + "\",";
         jsonfile += "\"status\":\"" + status + "\",";
         size_t totalBytes;
         size_t usedBytes;
-        totalBytes = SPIFFS.totalBytes();
-        usedBytes  = SPIFFS.usedBytes();
+        totalBytes = LittleFS.totalBytes();
+        usedBytes  = LittleFS.usedBytes();
         jsonfile += "\"total\":\"" + formatBytes(totalBytes) + "\",";
         jsonfile += "\"used\":\"" + formatBytes(usedBytes) + "\",";
         jsonfile.concat(F("\"occupation\":\""));
@@ -887,8 +871,8 @@ namespace WebUI {
         }
     }
 
-    //SPIFFS files uploader handle
-    void Web_Server::SPIFFSFileupload() {
+    //LittleFS files uploader handle
+    void Web_Server::LittleFSFileupload() {
         static String filename;
         static File   fsUploadFile = (File)0;
 
@@ -919,8 +903,8 @@ namespace WebUI {
                         filename        = "/user" + upload_filename;
                     }
 
-                    if (SPIFFS.exists(filename)) {
-                        SPIFFS.remove(filename);
+                    if (LittleFS.exists(filename)) {
+                        LittleFS.remove(filename);
                     }
                     if (fsUploadFile) {
                         fsUploadFile.close();
@@ -928,7 +912,7 @@ namespace WebUI {
                     String sizeargname = upload.filename + "S";
                     if (_webserver->hasArg(sizeargname)) {
                         uint32_t filesize  = _webserver->arg(sizeargname).toInt();
-                        uint32_t freespace = SPIFFS.totalBytes() - SPIFFS.usedBytes();
+                        uint32_t freespace = LittleFS.totalBytes() - LittleFS.usedBytes();
                         if (filesize > freespace) {
                             _upload_status = UploadStatusType::FAILED;
                             log_info("Upload error");
@@ -938,7 +922,7 @@ namespace WebUI {
 
                     if (_upload_status != UploadStatusType::FAILED) {
                         //create file
-                        fsUploadFile = SPIFFS.open(filename, FILE_WRITE);
+                        fsUploadFile = LittleFS.open(filename, FILE_WRITE);
                         //check If creation succeed
                         if (fsUploadFile) {
                             //if yes upload is started
@@ -977,7 +961,7 @@ namespace WebUI {
                         fsUploadFile.close();
                         //check size
                         String sizeargname = upload.filename + "S";
-                        fsUploadFile       = SPIFFS.open(filename, FILE_READ);
+                        fsUploadFile       = LittleFS.open(filename, FILE_READ);
                         uint32_t filesize  = fsUploadFile.size();
                         fsUploadFile.close();
 
@@ -1009,8 +993,8 @@ namespace WebUI {
 
         if (_upload_status == UploadStatusType::FAILED) {
             cancelUpload();
-            if (SPIFFS.exists(filename)) {
-                SPIFFS.remove(filename);
+            if (LittleFS.exists(filename)) {
+                LittleFS.remove(filename);
             }
         }
         COMMANDS::wait(0);
@@ -1173,6 +1157,45 @@ namespace WebUI {
         }
         file.close();
         return result ? SD.rmdir(path) : false;
+    }
+
+    //Function to delete not empty directory on SD card
+    bool Web_Server::deleteLittleFSRecursive(String path) {
+        bool result = true;
+        File file   = LittleFS.open(path);
+        //failed
+        if (!file) {
+            return false;
+        }
+        if (!file.isDirectory()) {
+            file.close();
+            //return if success or not
+            return LittleFS.remove(path);
+        }
+        file.rewindDirectory();
+        while (true) {
+            File entry = file.openNextFile();
+            if (!entry) {
+                break;
+            }
+            String entryPath = entry.name();
+            String fullName  = path + "/" + entryPath;
+            if (entry.isDirectory()) {
+                entry.close();
+                if (!deleteLittleFSRecursive(fullName)) {
+                    result = false;
+                }
+            } else {
+                entry.close();
+                if (!LittleFS.remove(fullName)) {
+                    result = false;
+                    break;
+                }
+            }
+            COMMANDS::wait(0);  //wdtFeed
+        }
+        file.close();
+        return result ? LittleFS.rmdir(path) : false;
     }
 
     //direct SD files list//////////////////////////////////////////////////
