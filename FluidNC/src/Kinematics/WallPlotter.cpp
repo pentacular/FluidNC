@@ -208,17 +208,17 @@ namespace Kinematics {
 
         // Translate to absolute coordinates.
         x = _left_anchor_x + a;
-        y = _left_anchor_x + h;
+        y = _left_anchor_y + h;
     }
 
     void WallPlotter::xy_to_lengths(float x, float y, float& left_length, float& right_length) {
         // We just need to compute the respective hypotenuse of each triangle.
 
-        float left_dy = _left_anchor_x - y;
+        float left_dy = _left_anchor_y - y;
         float left_dx = _left_anchor_x - x;
         left_length   = sqrt(left_dx * left_dx + left_dy * left_dy);
 
-        float right_dy = _right_anchor_x - y;
+        float right_dy = _right_anchor_y - y;
         float right_dx = _right_anchor_x - x;
         right_length   = sqrt(right_dx * right_dx + right_dy * right_dy);
     }

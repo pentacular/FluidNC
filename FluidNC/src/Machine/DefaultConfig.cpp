@@ -5,6 +5,9 @@ char Machine::MachineConfig::defaultConfig[] = R"config(
 board: None
 name: "Wall Plotter"
 
+start:
+  must_home: false
+
 stepping:
   engine: RMT
   idle_ms: 250
@@ -40,6 +43,9 @@ axes:
     max_travel_mm: 100
     max_rate_mm_per_min: 1000
     acceleration_mm_per_sec2: 100
+    homing:
+      cycle: 1
+      mpos_mm: 100
     motor0:
       rc_servo:
         pwm_hz: 50
@@ -47,7 +53,6 @@ axes:
         min_pulse_us: 1000
         max_pulse_us: 2000
 
-  # These are custom fields that aren't supported yet.
 kinematics:
   WallPlotter:
     left_axis: 0

@@ -253,13 +253,16 @@ bool mc_dwell(int32_t milliseconds) {
 // NOTE: There should be no motions in the buffer and the system must be in idle state before
 // executing the homing cycle. This prevents incorrect buffered plans after homing.
 void mc_homing_cycle(AxisMask axis_mask) {
+    log_info("mc_homing_cycle/1");
     if (user_defined_homing(axis_mask)) {
+    log_info("mc_homing_cycle/2");
         return;
     }
 
     if (config->_kinematics->kinematics_homing(axis_mask)) {
         // Allow kinematics to replace homing.
         // TODO: Better integrate this logic.
+    log_info("mc_homing_cycle/3");
         return;
     }
 
@@ -267,6 +270,7 @@ void mc_homing_cycle(AxisMask axis_mask) {
     // or if it is impossible to tell which end is engaged.  In that situation
     // we do not know the pulloff direction.
     if (ambiguousLimit()) {
+    log_info("mc_homing_cycle/4");
         mc_reset();  // Issue system reset and ensure spindle and coolant are shutdown.
         rtAlarm = ExecAlarm::HardLimit;
         return;
@@ -277,6 +281,7 @@ void mc_homing_cycle(AxisMask axis_mask) {
 
     protocol_execute_realtime();  // Check for reset and set system abort.
     if (sys.abort) {
+    log_info("mc_homing_cycle/5");
         return;  // Did not complete. Alarm state set by mc_alarm.
     }
     // Homing cycle complete! Setup system for normal operation.
@@ -286,6 +291,7 @@ void mc_homing_cycle(AxisMask axis_mask) {
     plan_sync_position();
     // This give kinematics a chance to do something after normal homing
     config->_kinematics->kinematics_post_homing();
+    log_info("mc_homing_cycle/6");
 }
 
 volatile ProbeState probeState;

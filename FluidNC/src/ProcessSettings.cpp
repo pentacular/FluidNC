@@ -226,14 +226,18 @@ static Error report_ngc(const char* value, WebUI::AuthenticationLevel auth_level
     return Error::Ok;
 }
 static Error home(int cycle) {
+    log_info("home/1");
     if (sys.state == State::ConfigAlarm) {
+    log_info("home/2");
         return Error::ConfigurationInvalid;
     }
     if (!Machine::Axes::homingMask) {
+    log_info("home/3");
         return Error::SettingDisabled;
     }
     Error err = isStuck();
     if (err != Error::Ok) {
+    log_info("home/4");
         return err;
     }
     sys.state = State::Homing;  // Set system state variable
@@ -245,12 +249,14 @@ static Error home(int cycle) {
     config->_stepping->endLowLatency();
 
     if (!sys.abort) {             // Execute startup scripts after successful homing.
+    log_info("home/5");
         sys.state = State::Idle;  // Set to IDLE when complete.
         Stepper::go_idle();       // Set steppers to the settings idle state before returning.
         if (cycle == Machine::Homing::AllCycles) {
             settings_execute_startup();
         }
     }
+    log_info("home/6");
     return Error::Ok;
 }
 static Error home_all(const char* value, WebUI::AuthenticationLevel auth_level, Print& out) {
