@@ -123,6 +123,7 @@ namespace MotorDrivers {
             servo_pos, limitsMinPosition(_axis_index), limitsMaxPosition(_axis_index), (float)_min_pulse_cnt, (float)_max_pulse_cnt));
 
         //log_info("su " << servo_pulse_len);
+        log_info("Servo: mpos=" << mpos << " servo_pulse_len=" << servo_pulse_len);
 
         _write_pwm(servo_pulse_len);
     }
