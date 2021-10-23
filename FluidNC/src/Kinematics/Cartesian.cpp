@@ -5,7 +5,7 @@
 
 namespace Kinematics {
     void Cartesian::init() {
-        config_message();
+        log_info("Kinematic system: " << name());
     }
 
     bool Cartesian::kinematics_homing(AxisMask cycle_mask) {
@@ -40,10 +40,6 @@ namespace Kinematics {
             }
         }
         return false;
-    }
-
-    void Cartesian::config_message() {
-        log_info("Kinematic system: " << name());
     }
 
     // Configuration registration

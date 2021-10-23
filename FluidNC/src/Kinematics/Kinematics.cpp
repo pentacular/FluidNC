@@ -36,7 +36,6 @@ namespace Kinematics {
     void Kinematics::group(Configuration::HandlerBase& handler) {
         ::Kinematics::KinematicsFactory::factory(handler, _system);
         Assert(_system != nullptr, "No kinematics system.");
-        _system->init();
     }
 
     void Kinematics::afterParse() {
@@ -48,12 +47,7 @@ namespace Kinematics {
 
     void Kinematics::init() {
         Assert(_system != nullptr, "init: Kinematics system missing.");
-        config_kinematics();
-    }
-
-    void Kinematics::config_kinematics() {
-        Assert(_system != nullptr, "No kinematics system.");
-        _system->config_kinematics();
+       _system->init();
     }
 
     Kinematics::~Kinematics() {

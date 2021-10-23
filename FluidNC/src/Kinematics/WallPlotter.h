@@ -23,7 +23,6 @@ namespace Kinematics {
 
         // Kinematic Interface
 
-        void config_message() override;
         void init() override;
         bool kinematics_homing(AxisMask cycle_mask) override;
         void kinematics_post_homing() override;

@@ -32,6 +32,8 @@ namespace Kinematics {
     }
 
     void WallPlotter::init() {
+        log_info("Kinematic system: " << name());
+
         // We assume the machine starts at cartesian (0, 0, 0).
         // The motors assume they start from (0, 0, 0).
         // So we need to derive the zero lengths to satisfy the kinematic equations.
@@ -41,8 +43,6 @@ namespace Kinematics {
         last_left  = zero_left;
         last_right = zero_right;
         last_z     = 0;
-
-        config_message();
     }
 
     bool WallPlotter::kinematics_homing(AxisMask cycle_mask) {
@@ -162,10 +162,6 @@ namespace Kinematics {
     */
     bool WallPlotter::limitsCheckTravel(float* target) {
         return false;
-    }
-
-    void WallPlotter::config_message() {
-        log_info("Kinematic system: " << name());
     }
 
     /*
