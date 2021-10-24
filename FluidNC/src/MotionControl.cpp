@@ -73,15 +73,18 @@ bool mc_move_motors(float* target, plan_line_data_t* pl_data) {
     // indicates to the firmware what is a backlash compensation motion, so that the move is executed
     // without updating the machine position values. Since the position values used by the g-code
     // parser and planner are separate from the system machine positions, this is doable.
+
     // If the buffer is full: good! That means we are well ahead of the robot.
     // Remain in this loop until there is room in the buffer.
     do {
         protocol_execute_realtime();  // Check for any run-time commands
         if (sys.abort) {
+            log_info("mc_move_motors: sys.abort submitted=" << submitted_result);
             mc_pl_data_inflight = NULL;
             return submitted_result;  // Bail, if system abort.
         }
         if (plan_check_full_buffer()) {
+            log_info("mc_move_motors: buffer_full");
             protocol_auto_cycle_start();  // Auto-cycle start when buffer is full.
         } else {
             break;
@@ -93,6 +96,7 @@ bool mc_move_motors(float* target, plan_line_data_t* pl_data) {
         submitted_result = true;
     }
     mc_pl_data_inflight = NULL;
+    log_info("mc_move_motors: " << target[0] << ", " << target[1] << ", " << target[2] << " submitted=" << submitted_result);
     return submitted_result;
 }
 

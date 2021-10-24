@@ -230,9 +230,5 @@ const double PARKING_PULLOUT_INCREMENT = 5.0;    // Spindle pull-out and plunge 
 // INCLUDE_OLED_BASIC includes a driver for a modest sized OLED display
 // #define INCLUDE_OLED_BASIC
 
-// Include exactly one kinematic system.
-// #define INCLUDE_KINEMATICS_CARTESIAN   // This is the standard kinematics which applies no transform.
-#define INCLUDE_KINEMATICS_WALL_PLOTTER
-// #define INCLUDE_KINEMATICS_COREXY
-// #define INCLUDE_KINEMATICS_POLAR_COASTER
-// #define INCLUDE_KINEMATICS_PARALLEL_DELTA
+#define DEBUG_REPORT_ECHO_LINE_RECEIVED
+#define DEBUG_STEPPER_ISR

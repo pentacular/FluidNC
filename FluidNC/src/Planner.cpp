@@ -184,11 +184,13 @@ static void planner_recalculate() {
 }
 
 void plan_reset() {
+    log_info("plan_reset");
     memset(&pl, 0, sizeof(planner_t));  // Clear planner struct
     plan_reset_buffer();
 }
 
 void plan_reset_buffer() {
+    log_info("plan_reset_buffer");
     block_buffer_tail    = 0;
     block_buffer_head    = 0;  // Empty = tail
     next_buffer_head     = 1;  // plan_next_block_index(block_buffer_head)
@@ -196,6 +198,7 @@ void plan_reset_buffer() {
 }
 
 void plan_discard_current_block() {
+    log_info("plan_discard_current_block");
     if (block_buffer_head != block_buffer_tail) {  // Discard non-empty buffer.
         uint8_t block_index = plan_next_block_index(block_buffer_tail);
         // Push block_buffer_planned pointer, if encountered.
@@ -229,6 +232,7 @@ float plan_get_exec_block_exit_speed_sqr() {
 
 // Returns the availability status of the block ring buffer. True, if full.
 uint8_t plan_check_full_buffer() {
+    log_info("check_full_buffer: " << (block_buffer_tail == next_buffer_head));
     return block_buffer_tail == next_buffer_head;
 }
 
@@ -284,6 +288,7 @@ void plan_update_velocity_profile_parameters() {
 }
 
 bool plan_buffer_line(float* target, plan_line_data_t* pl_data) {
+    log_info("plan_buffer_line");
     // Prepare and initialize new block. Copy relevant pl_data for block execution.
     plan_block_t* block = &block_buffer[block_buffer_head];
     memset(block, 0, sizeof(plan_block_t));  // Zero all block values.
@@ -440,6 +445,7 @@ uint8_t plan_get_block_buffer_count() {
 // Re-initialize buffer plan with a partially completed block, assumed to exist at the buffer tail.
 // Called after a steppers have come to a complete stop for a feed hold and the cycle is stopped.
 void plan_cycle_reinitialize() {
+    log_info("plan_cycle_reinitialize");
     // Re-plan from a complete stop. Reset planner entry speeds and buffer planned pointer.
     Stepper::update_plan_block_parameters();
     block_buffer_planned = block_buffer_tail;
