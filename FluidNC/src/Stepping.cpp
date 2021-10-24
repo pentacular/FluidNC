@@ -137,7 +137,7 @@ namespace Machine {
         }
     }
     void Stepping::startTimer() {
-        log_info("Stepping:startTimer");
+        // log_info("Stepping:startTimer");
         if (_engine == I2S_STREAM) {
             i2s_out_set_stepping();
         } else {
@@ -146,7 +146,7 @@ namespace Machine {
         }
     }
     void IRAM_ATTR Stepping::stopTimer() {
-        log_info("Stepping:stopTimer");
+        // log_info("Stepping:stopTimer");
         if (_engine == I2S_STREAM) {
             i2s_out_set_passthrough();
         } else if (stepTimer) {
