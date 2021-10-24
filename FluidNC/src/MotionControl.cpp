@@ -79,15 +79,16 @@ bool mc_move_motors(float* target, plan_line_data_t* pl_data) {
     do {
         protocol_execute_realtime();  // Check for any run-time commands
         if (sys.abort) {
-            log_info("A");
+            // log_info("A");
             mc_pl_data_inflight = NULL;
             return submitted_result;  // Bail, if system abort.
         }
         if (plan_check_full_buffer()) {
-            log_info("S");
+            // log_info("S");
             protocol_auto_cycle_start();  // Auto-cycle start when buffer is full.
+            // taskYIELD(); //  Give other tasks a slice.
         } else {
-            log_info("G");
+            // log_info("G");
             break;
         }
     } while (1);

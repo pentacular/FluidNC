@@ -15,7 +15,6 @@ namespace Machine {
                              EnumItem(Stepping::RMT) };
 
     void Stepping::init() {
-        // log_info("Stepping::init");
         log_info("Stepping:" << stepTypes[_engine].name << " Pulse:" << _pulseUsecs << "us Dsbl Delay:" << _disableDelayUsecs
                              << "us Dir Delay:" << _directionDelayUsecs << "us Idle Delay:" << _idleMsecs << "ms");
 
@@ -137,7 +136,6 @@ namespace Machine {
         }
     }
     void Stepping::startTimer() {
-        // log_info("Stepping:startTimer");
         if (_engine == I2S_STREAM) {
             i2s_out_set_stepping();
         } else {
@@ -146,7 +144,6 @@ namespace Machine {
         }
     }
     void IRAM_ATTR Stepping::stopTimer() {
-        // log_info("Stepping:stopTimer");
         if (_engine == I2S_STREAM) {
             i2s_out_set_passthrough();
         } else if (stepTimer) {

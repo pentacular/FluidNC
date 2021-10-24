@@ -163,7 +163,6 @@ static st_prep_t prep;
 
 // Stepper shutdown
 static void IRAM_ATTR stop_stepping() {
-    // log_info("Stepper::stop_stepping");
     // Disable Stepping Driver Interrupt.
     config->_stepping->stopTimer();
     config->_axes->unstep();
@@ -261,7 +260,6 @@ void IRAM_ATTR Stepper::pulse_func() {
 
 // enabled. Startup init and limits call this function but shouldn't start the cycle.
 void Stepper::wake_up() {
-    // log_info("Stepper::wake_up");
     // Enable stepper drivers.
     config->_axes->set_disable(false);
 
@@ -270,14 +268,12 @@ void Stepper::wake_up() {
 }
 
 void Stepper::go_idle() {
-    // log_info("Stepper::go_idle");
     stop_stepping();
     protocol_disable_steppers();
 }
 
 // Reset and clear stepper subsystem variables
 void Stepper::reset() {
-    // log_info("Stepper::reset");
     // Initialize Stepping driver idle state.
     config->_stepping->reset();
 
@@ -359,15 +355,12 @@ static uint8_t next_block_index(uint8_t block_index) {
    NOTE: Computation units are in steps, millimeters, and minutes.
 */
 void Stepper::prep_buffer() {
-    // log_info("Stepper:prep_buffer");
     // Block step prep buffer, while in a suspend state and there is no suspend motion to execute.
     if (sys.step_control.endMotion) {
-        // log_info("Stepper:prep_buffer/endMotion");
         return;
     }
 
     while (segment_buffer_tail != segment_next_head) {  // Check if we need to fill the buffer.
-        // log_info("Stepper:prep_buffer/not empty");
         // Determine if we need to load a new planner block or if the block needs to be recomputed.
         if (pl_block == NULL) {
             // Query planner for a queued block
@@ -378,7 +371,6 @@ void Stepper::prep_buffer() {
             }
 
             if (pl_block == NULL) {
-                // log_info("Stepper:prep_buffer/no planner blocks");
                 return;  // No planner blocks. Exit.
             }
 
@@ -771,6 +763,5 @@ float Stepper::get_realtime_rate() {
 }
 
 void Stepper::init() {
-    // log_info("Stepper::init");
     config->_stepping->init();
 }
