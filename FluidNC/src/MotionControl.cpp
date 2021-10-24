@@ -79,16 +79,13 @@ bool mc_move_motors(float* target, plan_line_data_t* pl_data) {
     do {
         protocol_execute_realtime();  // Check for any run-time commands
         if (sys.abort) {
-            // log_info("A");
             mc_pl_data_inflight = NULL;
             return submitted_result;  // Bail, if system abort.
         }
         if (plan_check_full_buffer()) {
-            // log_info("S");
             protocol_auto_cycle_start();  // Auto-cycle start when buffer is full.
             // taskYIELD(); //  Give other tasks a slice.
         } else {
-            // log_info("G");
             break;
         }
     } while (1);
@@ -98,7 +95,6 @@ bool mc_move_motors(float* target, plan_line_data_t* pl_data) {
         submitted_result = true;
     }
     mc_pl_data_inflight = NULL;
-    // log_info("mc_move_motors: " << target[0] << ", " << target[1] << ", " << target[2] << " submitted=" << submitted_result);
     return submitted_result;
 }
 
@@ -259,16 +255,13 @@ bool mc_dwell(int32_t milliseconds) {
 // NOTE: There should be no motions in the buffer and the system must be in idle state before
 // executing the homing cycle. This prevents incorrect buffered plans after homing.
 void mc_homing_cycle(AxisMask axis_mask) {
-    // log_info("mc_homing_cycle/1");
     if (user_defined_homing(axis_mask)) {
-    // log_info("mc_homing_cycle/2");
         return;
     }
 
     if (config->_kinematics->kinematics_homing(axis_mask)) {
         // Allow kinematics to replace homing.
         // TODO: Better integrate this logic.
-    // log_info("mc_homing_cycle/3");
         return;
     }
 
@@ -276,7 +269,6 @@ void mc_homing_cycle(AxisMask axis_mask) {
     // or if it is impossible to tell which end is engaged.  In that situation
     // we do not know the pulloff direction.
     if (ambiguousLimit()) {
-    // log_info("mc_homing_cycle/4");
         mc_reset();  // Issue system reset and ensure spindle and coolant are shutdown.
         rtAlarm = ExecAlarm::HardLimit;
         return;
@@ -287,7 +279,6 @@ void mc_homing_cycle(AxisMask axis_mask) {
 
     protocol_execute_realtime();  // Check for reset and set system abort.
     if (sys.abort) {
-    // log_info("mc_homing_cycle/5");
         return;  // Did not complete. Alarm state set by mc_alarm.
     }
     // Homing cycle complete! Setup system for normal operation.
@@ -297,7 +288,6 @@ void mc_homing_cycle(AxisMask axis_mask) {
     plan_sync_position();
     // This give kinematics a chance to do something after normal homing
     config->_kinematics->kinematics_post_homing();
-    // log_info("mc_homing_cycle/6");
 }
 
 volatile ProbeState probeState;
@@ -337,7 +327,7 @@ GCUpdatePos mc_probe_cycle(float* target, plan_line_data_t* pl_data, uint8_t par
         return GCUpdatePos::None;  // Nothing else to do but bail.
     }
     // Setup and queue probing motion. Auto cycle-start should not start the cycle.
-    // log_info("Found");
+    log_info("Found");
     mc_linear(target, pl_data, gc_state.position);
     // Activate the probing state monitor in the stepper module.
     probeState = ProbeState::Active;
