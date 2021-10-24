@@ -15,7 +15,7 @@ namespace Machine {
                              EnumItem(Stepping::RMT) };
 
     void Stepping::init() {
-        log_info("Stepping::init");
+        // log_info("Stepping::init");
         log_info("Stepping:" << stepTypes[_engine].name << " Pulse:" << _pulseUsecs << "us Dsbl Delay:" << _disableDelayUsecs
                              << "us Dir Delay:" << _directionDelayUsecs << "us Idle Delay:" << _idleMsecs << "ms");
 

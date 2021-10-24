@@ -248,6 +248,7 @@ InputClient* pollClients() {
                     client->_line[client->_linelen] = '\0';
                     client->_line_returned          = true;
                     display("GCODE", client->_line);
+                    vTaskDelay(1); //  Give other tasks a slice.
                     return client;
                 } else {
                     // Log an error and discard the line if it happens during an SD run
