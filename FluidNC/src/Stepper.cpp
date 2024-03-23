@@ -7,6 +7,13 @@
   Stepper.cpp - stepper motor driver: executes motion plans using stepper motors
 */
 
+/*
+[MSG:DBG: pcsnan/6]
+[MSG:DBG: v: c=1 ess=-8176.407]
+[MSG:DBG: v: c=2 ess=-8176.407]
+[MSG:DBG: v: c=3 ess=nan]
+*/
+
 #include "Stepper.h"
 
 #include "Machine/MachineConfig.h"
@@ -328,6 +335,9 @@ bool Stepper::update_plan_block_parameters() {
     if (pl_block != NULL) {  // Ignore if at start of a new block.
         prep.recalculate_flag.recalculate = 1;
         pl_block->entry_speed_sqr         = prep.current_speed * prep.current_speed;  // Update entry speed.
+        if (!(pl_block->entry_speed_sqr > -0.0000001)) {
+          log_debug("supbp/1: ess=" << pl_block->entry_speed_sqr);
+        }
         pl_block                          = NULL;  // Flag prep_segment() to load and check active velocity profile.
         return true;
     }
@@ -441,10 +451,15 @@ void Stepper::prep_buffer() {
                 if ((sys.step_control.executeHold) || prep.recalculate_flag.decelOverride) {
                     // New block loaded mid-hold. Override planner block entry speed to enforce deceleration.
                     prep.current_speed                  = prep.exit_speed;
+                    if (isnan(prep.current_speed)) { log_debug("pcsnan/5"); }
                     pl_block->entry_speed_sqr           = prep.exit_speed * prep.exit_speed;
+                    if (!(pl_block->entry_speed_sqr > -0.0000001)) {
+                      log_debug("supbp/1: ess=" << pl_block->entry_speed_sqr);
+                    }
                     prep.recalculate_flag.decelOverride = 0;
                 } else {
                     prep.current_speed = sqrtf(pl_block->entry_speed_sqr);
+                    if (isnan(prep.current_speed)) { log_debug("pcsnan/6: ess=" << pl_block->entry_speed_sqr); }
                 }
 
                 // prep.inv_rate is only used if is_pwm_rate_adjusted is true
@@ -590,8 +605,10 @@ void Stepper::prep_buffer() {
                         time_var           = 2.0f * (pl_block->millimeters - mm_remaining) / (prep.current_speed + prep.maximum_speed);
                         prep.ramp_type     = RAMP_CRUISE;
                         prep.current_speed = prep.maximum_speed;
+                        if (isnan(prep.current_speed)) { log_debug("pcsnan/2"); }
                     } else {  // Mid-deceleration override ramp.
                         prep.current_speed -= speed_var;
+                        if (prep.current_speed < 0) { log_debug("step: cs=" << prep.current_speed); }
                     }
                     break;
                 case RAMP_ACCEL:
@@ -608,6 +625,7 @@ void Stepper::prep_buffer() {
                             prep.ramp_type = RAMP_CRUISE;
                         }
                         prep.current_speed = prep.maximum_speed;
+                        if (isnan(prep.current_speed)) { log_debug("pcsnan/3"); }
                     } else {  // Acceleration only.
                         prep.current_speed += speed_var;
                     }
@@ -635,6 +653,7 @@ void Stepper::prep_buffer() {
                         if (mm_var > prep.mm_complete) {                                             // Typical case. In deceleration ramp.
                             mm_remaining = mm_var;
                             prep.current_speed -= speed_var;
+                            if (prep.current_speed < 0) { log_debug("step: cs=" << prep.current_speed); }
                             break;  // Segment complete. Exit switch-case statement. Continue do-while loop.
                         }
                     }
@@ -642,6 +661,7 @@ void Stepper::prep_buffer() {
                     time_var           = 2.0f * (mm_remaining - prep.mm_complete) / (prep.current_speed + prep.exit_speed);
                     mm_remaining       = prep.mm_complete;
                     prep.current_speed = prep.exit_speed;
+                    if (isnan(prep.current_speed)) { log_debug("pcsnan/4"); }
             }
 
             dt += time_var;  // Add computed ramp time to total segment time.

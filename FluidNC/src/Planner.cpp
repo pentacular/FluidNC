@@ -121,6 +121,10 @@ static uint8_t plan_prev_block_index(uint8_t block_index) {
 
 */
 static void planner_recalculate() {
+    if (block_buffer_head == block_buffer_tail) {
+        // Nothing to do; planner buffer is empty.
+        return;
+    }
     // Initialize block index to the last block in the planner buffer.
     uint8_t block_index = plan_prev_block_index(block_buffer_head);
     // Bail. Can't do anything with one only one plan-able block.
@@ -135,6 +139,9 @@ static void planner_recalculate() {
     plan_block_t* current = &block_buffer[block_index];
     // Calculate maximum entry speed for last block in buffer, where the exit speed is always zero.
     current->entry_speed_sqr = MIN(current->max_entry_speed_sqr, 2 * current->acceleration * current->millimeters);
+    if (!(current->entry_speed_sqr > -0.0000001)) {
+      log_debug("pr/0: ess=" << current->entry_speed_sqr << " cmess=" << current->max_entry_speed_sqr << " a=" << current->acceleration << " m=" << current->millimeters);
+    }
     block_index              = plan_prev_block_index(block_index);
     if (block_index == block_buffer_planned) {  // Only two plannable blocks in buffer. Reverse pass complete.
         // Check if the first block is the tail. If so, notify stepper to update its current parameters.
@@ -153,10 +160,22 @@ static void planner_recalculate() {
             // Compute maximum entry speed decelerating over the current block from its exit speed.
             if (current->entry_speed_sqr != current->max_entry_speed_sqr) {
                 entry_speed_sqr = next->entry_speed_sqr + 2 * current->acceleration * current->millimeters;
+                if (!(entry_speed_sqr > -0.000001)) {
+                  log_debug("pr/1a: ess=" << entry_speed_sqr << " ness=" << next->entry_speed_sqr << " a=" << current->acceleration << " m=" << current->millimeters);
+                  // [MSG:DBG: pr/1: ess=-8192.253 ness=-8192.253 a=0.000 m=1.981]
+                }
                 if (entry_speed_sqr < current->max_entry_speed_sqr) {
                     current->entry_speed_sqr = entry_speed_sqr;
+                    if (!(current->entry_speed_sqr > -0.000001)) {
+                      log_debug("pr/1b");
+                    }
                 } else {
                     current->entry_speed_sqr = current->max_entry_speed_sqr;
+                    if (!(current->entry_speed_sqr > -0.000001)) {
+                      log_debug("pr/1c: cmess=" << current->max_entry_speed_sqr << " bbh=" << block_buffer_head << " bi=" << block_index << " bbt=" << block_buffer_tail << " bbp=" << block_buffer_planned);
+                      // [MSG:DBG: pr/1c: cmess=-8192.253 bbh=0 bi=6 bbt=0 bbp=0]
+                      plan_validate(-2);
+                    }
                 }
             }
         }
@@ -173,6 +192,9 @@ static void planner_recalculate() {
         // can improve the plan from the buffer tail to the planned pointer by logic.
         if (current->entry_speed_sqr < next->entry_speed_sqr) {
             entry_speed_sqr = current->entry_speed_sqr + 2 * current->acceleration * current->millimeters;
+            if (!(entry_speed_sqr > -0.000001)) {
+              log_debug("pr/2: ess=" << entry_speed_sqr << " ness=" << next->entry_speed_sqr << " a=" << current->acceleration << " m=" << current->millimeters);
+            }
             // If true, current block is full-acceleration and we can move the planned pointer forward.
             if (entry_speed_sqr < next->entry_speed_sqr) {
                 next->entry_speed_sqr = entry_speed_sqr;  // Always <= max_entry_speed_sqr. Backward pass sets this.
@@ -266,12 +288,29 @@ static void plan_compute_profile_parameters(plan_block_t* block, float nominal_s
     // Compute the junction maximum entry based on the minimum of the junction speed and neighboring nominal speeds.
     if (nominal_speed > prev_nominal_speed) {
         block->max_entry_speed_sqr = prev_nominal_speed * prev_nominal_speed;
+        if (!(block->max_entry_speed_sqr > -0.0000001)) { log_debug("pcpp/1: cmess=" << block->max_entry_speed_sqr); }
     } else {
         block->max_entry_speed_sqr = nominal_speed * nominal_speed;
+        if (!(block->max_entry_speed_sqr > -0.0000001)) { log_debug("pcpp/2: cmess=" << block->max_entry_speed_sqr); }
     }
 
     if (block->max_entry_speed_sqr > block->max_junction_speed_sqr) {
         block->max_entry_speed_sqr = block->max_junction_speed_sqr;
+        if (!(block->max_entry_speed_sqr > -0.0000001)) { log_debug("pcpp/3: cmess=" << block->max_entry_speed_sqr); }
+    }
+}
+
+void plan_validate(int cycle) {
+    uint8_t       block_index = block_buffer_tail;
+    while (block_index != block_buffer_head) {
+        plan_block_t* block = &block_buffer[block_index];
+        if (!(block->acceleration > -0.0000001)) { log_debug("v: c=" << cycle << " a=" << block->acceleration); }
+        if (!(block->entry_speed_sqr > -0.0000001)) { log_debug("v: c=" << cycle << " ess=" << block->entry_speed_sqr); }
+        if (!(block->max_entry_speed_sqr > -0.0000001)) { log_debug("v: c=" << cycle << " mess=" << block->max_entry_speed_sqr); }
+        if (!(block->max_junction_speed_sqr > -0.0000001)) { log_debug("v: c=" << cycle << " mjss=" << block->max_junction_speed_sqr); }
+        if (!(block->rapid_rate > -0.0000001)) { log_debug("v: c=" << cycle << " rr=" << block->rapid_rate); }
+        if (!(block->programmed_rate > -0.0000001)) { log_debug("v: c=" << cycle << " pr=" << block->programmed_rate); }
+        block_index = plan_next_block_index(block_index);
     }
 }
 
@@ -283,10 +322,12 @@ void plan_update_velocity_profile_parameters() {
     float         prev_nominal_speed = SOME_LARGE_VALUE;  // Set high for first block nominal speed calculation.
     while (block_index != block_buffer_head) {
         block         = &block_buffer[block_index];
+        if (block->acceleration < 0) { log_debug("u/1: a= " << block->acceleration); }
         nominal_speed = plan_compute_profile_nominal_speed(block);
         plan_compute_profile_parameters(block, nominal_speed, prev_nominal_speed);
         prev_nominal_speed = nominal_speed;
         block_index        = plan_next_block_index(block_index);
+        if (block->acceleration < -0.00000001) { log_debug("u/2: a= " << block->acceleration); }
     }
     pl.previous_nominal_speed = prev_nominal_speed;  // Update prev nominal speed for next incoming block.
 }
@@ -342,6 +383,7 @@ bool plan_buffer_line(float* target, plan_line_data_t* pl_data) {
     // if they are also orthogonal/independent. Operates on the absolute value of the unit vector.
     block->millimeters  = convert_delta_vector_to_unit_vector(unit_vec);
     block->acceleration = limit_acceleration_by_axis_maximum(unit_vec);
+    if (block->acceleration < -0.00001) { log_debug("a/1"); }
     block->rapid_rate   = limit_rate_by_axis_maximum(unit_vec);
     // Store programmed rate.
     if (block->motion.rapidMotion) {
@@ -418,6 +460,7 @@ bool plan_buffer_line(float* target, plan_line_data_t* pl_data) {
         // Finish up by recalculating the plan with the new block.
         planner_recalculate();
     }
+    plan_validate(-1);
     return true;
 }
 

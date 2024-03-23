@@ -95,8 +95,8 @@ const bool FORCE_INITIALIZATION_ALARM = false;  // Default disabled. Uncomment t
 // note the allowable values in the descriptions following each define.
 namespace FeedOverride {
     const int Default         = 100;  // 100%. Don't change this value.
-    const int Max             = 200;  // Percent of programmed feed rate (100-255). Usually 120% or 200%
-    const int Min             = 10;   // Percent of programmed feed rate (1-100). Usually 50% or 1%
+    const int Max             = 100;  // Percent of programmed feed rate (100-255). Usually 120% or 200%
+    const int Min             = 5;    // Percent of programmed feed rate (1-100). Usually 50% or 1%
     const int CoarseIncrement = 10;   // (1-99). Usually 10%.
     const int FineIncrement   = 1;    // (1-99). Usually 1%.
 };

@@ -74,6 +74,8 @@ struct plan_line_data_t {
 
 void plan_init();
 
+void plan_validate(int cycle); // QQQ
+
 // Initialize and reset the motion plan subsystem
 void plan_reset();         // Reset all
 void plan_reset_buffer();  // Reset buffer only.
