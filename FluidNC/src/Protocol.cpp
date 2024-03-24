@@ -241,10 +241,12 @@ void     protocol_main_loop() {
 #if 1
             if (config->_probe->get_state()) {
               // too noisy
-              protocol_send_event(&feedOverrideEvent, -FeedOverride::CoarseIncrement);
+              // protocol_send_event(&feedOverrideEvent, -FeedOverride::CoarseIncrement);
+              protocol_send_event(&feedOverrideEvent, -100);
             } else {
               // not too noisy
-              protocol_send_event(&feedOverrideEvent, FeedOverride::FineIncrement);
+              // protocol_send_event(&feedOverrideEvent, FeedOverride::FineIncrement);
+              protocol_send_event(&feedOverrideEvent, 1);
             }
 #endif
         }
@@ -930,7 +932,7 @@ static void protocol_do_feed_override(void* incrementvp) {
         }
     }
     if (percent != sys.f_override) {
-        // log_debug("FRO: " << percent);
+        log_debug("FRO: " << percent);
         sys.f_override = percent;
         update_velocities();
     }
