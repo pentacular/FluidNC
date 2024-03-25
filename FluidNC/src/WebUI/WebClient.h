@@ -4,32 +4,46 @@
 #pragma once
 
 #include "../Config.h"  // ENABLE_*
-
-#include <cstdint>
-#include <Print.h>
+#include "../Channel.h"
 
 #ifdef ENABLE_WIFI
 class WebServer;
 
 namespace WebUI {
-    class WebClient : public Print {
+    class WebClient : public Channel {
     public:
-        WebClient(WebServer* webserver, bool silent);
+        WebClient();
         ~WebClient();
+
+        void attachWS(WebServer* webserver, bool silent);
+        void detachWS();
 
         size_t write(uint8_t data) override;
         size_t write(const uint8_t* buffer, size_t length) override;
         void   flush();
 
+        void sendLine(MsgLevel level, const char* line) override;
+        void sendLine(MsgLevel level, const std::string* line) override;
+        void sendLine(MsgLevel level, const std::string& line) override;
+
+        void sendError(int code, const std::string& line);
+
         bool anyOutput() { return _header_sent; }
 
+        void out(const char* s, const char* tag) override;
+        void out(const std::string& s, const char* tag) override;
+        void out_acked(const std::string& s, const char* tag) override;
+
     private:
-        bool                _header_sent;
-        bool                _silent;
-        WebServer*          _webserver;
-        static const size_t BUFLEN = 1200;
+        bool                _header_sent = false;
+        bool                _silent      = false;
+        WebServer*          _webserver   = nullptr;
+        static const size_t BUFLEN       = 1200;
         char                _buffer[BUFLEN];
-        size_t              _buflen;
+        size_t              _buflen = 0;
     };
+
+    extern WebClient webClient;
 }
+
 #endif

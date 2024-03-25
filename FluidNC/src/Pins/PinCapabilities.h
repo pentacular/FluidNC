@@ -21,11 +21,12 @@ namespace Pins {
         friend class PinAttributes;  // Wants access to _value for validation
 
     public:
-        PinCapabilities(const PinCapabilities&) = default;
+        PinCapabilities(const PinCapabilities&)            = default;
         PinCapabilities& operator=(const PinCapabilities&) = default;
 
         // All the capabilities we use and test:
-        static PinCapabilities None;
+        static PinCapabilities None;      // Nonexistent pin
+        static PinCapabilities Reserved;  // Pin reserved for system use
 
         static PinCapabilities Input;     // NOTE: Mapped in PinAttributes!
         static PinCapabilities Output;    // NOTE: Mapped in PinAttributes!
@@ -43,6 +44,7 @@ namespace Pins {
         // can compare classes of pins along with their properties by just looking at the capabilities.
         static PinCapabilities Native;
         static PinCapabilities I2S;
+        static PinCapabilities UARTIO;
         static PinCapabilities Error;
         static PinCapabilities Void;
 

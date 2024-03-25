@@ -6,18 +6,17 @@
 #include "Pins/PinDetail.h"
 #include "Pins/PinCapabilities.h"
 #include "Pins/PinAttributes.h"
-#include "StringRange.h"
+#include "src/Machine/EventPin.h"
 
 #include <esp_attr.h>  // IRAM_ATTR
 #include <cstdint>
+#include <string>
 #include <cstring>
 #include <utility>
+#include <string_view>
 #include "Assert.h"
 
 // #define DEBUG_PIN_DUMP  // Pin debugging. WILL spam you with a lot of data!
-
-// Forward declarations:
-class String;
 
 // Pin class. A pin is basically a thing that can 'output', 'input' or do both. GPIO on an ESP32 comes to mind,
 // but there are way more possible pins. Think about I2S/I2C/SPI extenders, RS485 driven pin devices and even
@@ -38,17 +37,21 @@ class String;
 // one-stop-go-to-shop for an pin.
 class Pin {
     // Helper for handling callbacks and mapping them to the proper class:
-    template <typename ThisType, void (ThisType::*Callback)()>
-    struct InterruptCallbackHelper {
-        static void IRAM_ATTR callback(void* ptr) { (static_cast<ThisType*>(ptr)->*Callback)(); }
-    };
+    //
+    // Take note: this is placing the code in FLASH instead of IRAM, like it should. Use the #define's above
+    // until this is fixed!
+
+    // template <typename ThisType, void (ThisType::*Callback)()>
+    // struct InterruptCallbackHelper {
+    //     static void IRAM_ATTR callback(void* ptr) { (static_cast<ThisType*>(ptr)->*Callback)(); }
+    // };
 
     // Helper for handling callbacks and mapping them to the proper class. This one is just meant
     // for backward compatibility:
-    template <void (*Callback)()>
-    struct InterruptCallbackHelper2 {
-        static void IRAM_ATTR callback(void* /*ptr*/) { Callback(); }
-    };
+    // template <void (*Callback)()>
+    // struct InterruptCallbackHelper2 {
+    //     static void IRAM_ATTR callback(void* /*ptr*/) { Callback(); }
+    // };
 
     // The undefined pin and error pin are two special pins. Error pins always throw an error when they are used.
     // These are useful for unit testing, and for initializing pins that _always_ have to be defined by a user
@@ -60,7 +63,7 @@ class Pin {
     // Implementation details of this pin.
     Pins::PinDetail* _detail;
 
-    static const char* parse(StringRange str, Pins::PinDetail*& detail);
+    static const char* parse(std::string_view str, Pins::PinDetail*& detail);
 
     inline Pin(Pins::PinDetail* detail) : _detail(detail) {}
 
@@ -74,12 +77,16 @@ public:
     static const bool On  = true;
     static const bool Off = false;
 
-    // inline static Pins::PinDetail* create(const char* str) { return create(StringRange(str)); };
+    static const int NO_INTERRUPT = 0;
+    static const int RISING_EDGE  = 1;
+    static const int FALLING_EDGE = 2;
+    static const int EITHER_EDGE  = 3;
 
-    static Pin  create(const char* str) { return create(StringRange(str)); }  // ensure it's not ambiguous
-    static Pin  create(const StringRange& str);
-    static Pin  create(const String& str);
-    static bool validate(const String& str);
+    static const int ASSERTING   = 0x10;
+    static const int DEASSERTING = 0x11;
+
+    static Pin  create(std::string_view str);
+    static bool validate(const char* str);
 
     // We delete the copy constructor, and implement the move constructor. The move constructor is required to support
     // the correct execution of 'return' in f.ex. `create` calls. It basically transfers ownership from the callee to the
@@ -103,7 +110,7 @@ public:
     // External libraries normally use digitalWrite, digitalRead and setMode. Since we cannot handle that behavior, we
     // just give back the pinnum_t for getNative.
     inline pinnum_t getNative(Capabilities expectedBehavior) const {
-        Assert(_detail->capabilities().has(expectedBehavior), "Requested pin %s does not have the expected behavior.",name().c_str());
+        Assert(_detail->capabilities().has(expectedBehavior), "Requested pin %s does not have the expected behavior.", name().c_str());
         return _detail->_index;
     }
 
@@ -121,24 +128,15 @@ public:
 
     static Pin Error() { return Pin(errorPin); }
 
-    // ISR handlers. Map methods on 'this' types.
-
-    template <typename ThisType, void (ThisType::*Callback)()>
-    void attachInterrupt(ThisType* arg, int mode) {
-        _detail->attachInterrupt(InterruptCallbackHelper<ThisType, Callback>::callback, arg, mode);
-    }
-
-    // Backward compatibility ISR handler:
-    void attachInterrupt(void (*callback)(void*), int mode, void* arg = nullptr) const { _detail->attachInterrupt(callback, arg, mode); }
-
-    void detachInterrupt() const { _detail->detachInterrupt(); }
+    void registerEvent(EventPin* obj) { _detail->registerEvent(obj); };
 
     // Other functions:
     Capabilities capabilities() const { return _detail->capabilities(); }
 
-    inline String name() const { return _detail->toString(); }
+    inline std::string name() const { return _detail->toString(); }
 
     void report(const char* legend);
+    void report(std::string legend) { report(legend.c_str()); }
 
     inline void swap(Pin& o) { std::swap(o._detail, _detail); }
 

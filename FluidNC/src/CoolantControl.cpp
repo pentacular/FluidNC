@@ -3,6 +3,7 @@
 // Use of this source code is governed by a GPLv3 license that can be found in the LICENSE file.
 
 #include "CoolantControl.h"
+#include "System.h"
 
 void CoolantControl::init() {
     static bool init_message = true;  // used to show messages only once.
@@ -52,9 +53,11 @@ void CoolantControl::write(CoolantState state) {
         bool pinState = state.Mist;
         _mist.synchronousWrite(pinState);
     }
+
+    _previous_state = state;
 }
 
-// Directly called by coolant_init(), coolant_set_state(), and mc_reset(), which can be at
+// Directly called by coolant_init(), coolant_set_state(), which can be at
 // an interrupt-level. No report flag set, but only called by routines that don't need it.
 void CoolantControl::stop() {
     CoolantState disable = {};
@@ -67,11 +70,13 @@ void CoolantControl::stop() {
 // parser program end, and g-code parser CoolantControl::sync().
 
 void CoolantControl::set_state(CoolantState state) {
-    if (sys.abort) {
-        return;  // Block during abort.
+    if (sys.abort || (_previous_state.Mist == state.Mist && _previous_state.Flood == state.Flood)) {
+        return;  // Block during abort or if no change
     }
     write(state);
-    delay_msec(_delay_ms, DwellMode::SysSuspend);
+
+    if (state.Mist || state.Flood)  // ignore delay on turn off
+        delay_msec(_delay_ms, DwellMode::SysSuspend);
 }
 
 void CoolantControl::off() {
@@ -82,5 +87,5 @@ void CoolantControl::off() {
 void CoolantControl::group(Configuration::HandlerBase& handler) {
     handler.item("flood_pin", _flood);
     handler.item("mist_pin", _mist);
-    handler.item("delay_ms", _delay_ms);
+    handler.item("delay_ms", _delay_ms, 0, 10000);
 }

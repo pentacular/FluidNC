@@ -1,7 +1,6 @@
 #include "../TestFramework.h"
 
 #include <src/Pin.h>
-#include <esp32-hal-gpio.h>  // CHANGE
 
 namespace Pins {
     Test(Error, Pins) {
@@ -16,9 +15,6 @@ namespace Pins {
 
         AssertThrow(errorPin.write(true));
         AssertThrow(errorPin.read());
-
-        AssertThrow(errorPin.attachInterrupt([](void* arg) {}, CHANGE));
-        AssertThrow(errorPin.detachInterrupt());
 
         Assert(errorPin.capabilities() == Pin::Capabilities::Error, "Incorrect caps");
     }

@@ -6,63 +6,35 @@
 #include <Esp.h>        // ESP.restart()
 
 #include "Authentication.h"  // MAX_LOCAL_PASSWORD_LENGTH
+#include "../Configuration/JsonGenerator.h"
 
 #include <esp_err.h>
 #include <cstring>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-esp_err_t esp_task_wdt_reset();
-#ifdef __cplusplus
-}
-#endif
-
 namespace WebUI {
-    bool COMMANDS::restart_ESP_module = false;
+    bool COMMANDS::_restart_MCU = false;
 
-    /*
-     * delay is to avoid with asyncwebserver and may need to wait sometimes
-     */
-    void COMMANDS::wait(uint32_t milliseconds) {
-        uint32_t start_time = millis();
-        //wait feeding WDT
-        do {
-            esp_task_wdt_reset();
-        } while ((millis() - start_time) < milliseconds);
+    void COMMANDS::send_json_command_response(Channel& out, uint cmdID, bool isok, std::string message) {
+        JSONencoder j(true, &out);
+        j.begin();
+        j.member("cmd", String(cmdID).c_str());
+        j.member("status", isok ? "ok" : "error");
+        j.member("data", message);
+        j.end();
     }
-    bool COMMANDS::isLocalPasswordValid(char* password) {
-        if (!password) {
-            return true;
-        }
-        char c;
-        //limited size
-        if ((strlen(password) > MAX_LOCAL_PASSWORD_LENGTH) || (strlen(password) < MIN_LOCAL_PASSWORD_LENGTH)) {
-            return false;
-        }
 
-        //no space allowed
-        for (size_t i = 0; i < strlen(password); i++) {
-            c = password[i];
-            if (c == ' ') {
-                return false;
-            }
-        }
-        return true;
-    }
+    bool COMMANDS::isJSON(const char* cmd_params) { return strstr(cmd_params, "json=yes") != NULL; }
 
     /**
      * Restart ESP
      */
-    void COMMANDS::restart_ESP() { restart_ESP_module = true; }
+    void COMMANDS::restart_MCU() { _restart_MCU = true; }
 
     /**
      * Handle not critical actions that must be done in sync environement
      */
     void COMMANDS::handle() {
-        COMMANDS::wait(0);
-        //in case of restart requested
-        if (restart_ESP_module) {
+        if (_restart_MCU) {
             ESP.restart();
             while (1) {}
         }

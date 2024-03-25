@@ -64,19 +64,19 @@ namespace MotorDrivers {
 
         // set_direction() sets the motor movement direction.  It is
         // invoked for every motion segment.
-        virtual void set_direction(bool) {}
+        virtual void set_direction(bool);
 
         // step() initiates a step operation on a motor.  It is called
         // from motors_step() for ever motor than needs to step now.
         // For ordinary step/direction motors, it sets the step pin
         // to the active state.
-        virtual void step() {}
+        virtual void step();
 
         // unstep() turns off the step pin, if applicable, for a motor.
         // It is called from motors_unstep() for all motors, since
         // motors_unstep() is used in many contexts where the previous
         // states of the step pins are unknown.
-        virtual void unstep() {}
+        virtual void unstep();
 
         // this is used to configure and test motors. This would be used for Trinamic
         virtual void config_motor() {}
@@ -86,11 +86,6 @@ namespace MotorDrivers {
         // implementations also display messages to show the result.
         // TODO Architecture: Should this be private?
         virtual bool test();
-
-        // update() is used for some types of "smart" motors that
-        // can be told to move to a specific position.  It is
-        // called from a periodic task.
-        virtual void update() {}
 
         // Name is required for the configuration factory to work.
         virtual const char* name() const = 0;
@@ -102,7 +97,7 @@ namespace MotorDrivers {
         virtual ~MotorDriver() {}
 
     protected:
-        String axisName() const;
+        std::string axisName() const;
 
         // config_message(), called from init(), displays a message describing
         // the motor configuration - pins and other motor-specific items

@@ -20,10 +20,11 @@
 */
 #include "VFDSpindle.h"
 
-#include "../Machine/MachineConfig.h"
-#include "../MotionControl.h"  // mc_reset
-#include "../Protocol.h"       // rtAlarm
-#include "../Report.h"         // hex message
+#include "src/Machine/MachineConfig.h"
+#include "src/MotionControl.h"  // mc_critical
+#include "src/Protocol.h"       // rtAlarm
+#include "src/Report.h"         // hex message
+#include "src/Configuration/HandlerType.h"
 
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -75,7 +76,7 @@ namespace Spindles {
         uint8_t       rx_message[VFD_RS485_MAX_MSG_SIZE];
         bool          safetyPollingEnabled = instance->safety_polling();
 
-        for (; true; vTaskDelay(VFD_RS485_POLL_RATE / portTICK_PERIOD_MS)) {
+        for (; true; delay_ms(VFD_RS485_POLL_RATE)) {
             std::atomic_thread_fence(std::memory_order::memory_order_seq_cst);  // read fence for settings
             response_parser parser = nullptr;
 
@@ -179,7 +180,7 @@ namespace Spindles {
 
                 // Read the response
                 size_t read_length  = 0;
-                size_t current_read = uart.readBytes(rx_message, next_cmd.rx_length, response_ticks);
+                size_t current_read = uart.timedReadBytes(rx_message, next_cmd.rx_length, response_ticks);
                 read_length += current_read;
 
                 // Apparently some Huanyang report modbus errors in the correct way, and the rest not. Sigh.
@@ -190,7 +191,7 @@ namespace Spindles {
 
                 while (read_length < next_cmd.rx_length && current_read > 0) {
                     // Try to read more; we're not there yet...
-                    current_read = uart.readBytes(rx_message + read_length, next_cmd.rx_length - read_length, response_ticks);
+                    current_read = uart.timedReadBytes(rx_message + read_length, next_cmd.rx_length - read_length, response_ticks);
                     read_length += current_read;
                 }
 
@@ -228,7 +229,7 @@ namespace Spindles {
 
                     // Wait a bit before we retry. Set the delay to poll-rate. Not sure
                     // if we should use a different value...
-                    vTaskDelay(VFD_RS485_POLL_RATE / portTICK_PERIOD_MS);
+                    delay_ms(VFD_RS485_POLL_RATE);
 
 #ifdef DEBUG_TASK_STACK
                     static UBaseType_t uxHighWaterMark = 0;
@@ -244,9 +245,8 @@ namespace Spindles {
                     pollidx      = -1;
                 }
                 if (next_cmd.critical) {
+                    mc_critical(ExecAlarm::SpindleControl);
                     log_error("Critical VFD RS485 Unresponsive");
-                    mc_reset();
-                    rtAlarm = ExecAlarm::SpindleControl;
                 }
             }
         }
@@ -258,13 +258,17 @@ namespace Spindles {
         _sync_dev_speed = 0;
         _syncing        = false;
 
-        // fail if required items are not defined
-        // get_pins_and_settings reports detailed error messages
-        if (!get_pins_and_settings()) {
-            return;
+        // The following lets you have either a uart: section below the VFD section,
+        // or "uart_num: N" referring to an externally defined uartN: section - but not both
+        if (_uart) {
+            _uart->begin();
+        } else {
+            _uart = config->_uarts[_uart_num];
+            if (!_uart) {
+                log_error("VFDSpindle: Missing uart" << _uart_num << "section");
+                return;
+            }
         }
-
-        _uart->begin();
 
         if (_uart->setHalfDuplex()) {
             log_info("VFD: RS485 UART set half duplex failed");
@@ -296,14 +300,10 @@ namespace Spindles {
         set_mode(SpindleState::Disable, true);
     }
 
-    // Checks for all the required pin definitions
-    // It returns a message for each missing pin
-    // Returns true if all pins are defined.
-    bool VFD::get_pins_and_settings() { return true; }
-
     void VFD::config_message() { _uart->config_message(name(), " Spindle "); }
 
     void VFD::setState(SpindleState state, SpindleSpeed speed) {
+        log_debug("VFD setState:" << uint8_t(state) << " SpindleSpeed:" << speed);
         if (sys.abort) {
             return;  // Block during abort.
         }
@@ -332,7 +332,7 @@ namespace Spindles {
             // responses from periodic get_current_speed() requests.
             // It changes as the actual speed ramps toward the target.
 
-            _syncing = true;
+            _syncing = true;  // poll for speed
 
             auto minSpeedAllowed = dev_speed > _slop ? (dev_speed - _slop) : 0;
             auto maxSpeedAllowed = dev_speed + _slop;
@@ -341,29 +341,32 @@ namespace Spindles {
             const int limit     = 20;  // 20 * 0.5s = 10 sec
             auto      last      = _sync_dev_speed;
 
-            while ((_sync_dev_speed < minSpeedAllowed || _sync_dev_speed > maxSpeedAllowed) && unchanged < limit) {
+            while ((_last_override_value == sys.spindle_speed_ovr) &&  // skip if the override changes
+                   ((_sync_dev_speed < minSpeedAllowed || _sync_dev_speed > maxSpeedAllowed) && unchanged < limit)) {
 #ifdef DEBUG_VFD
                 log_debug("Syncing speed. Requested: " << int(dev_speed) << " current:" << int(_sync_dev_speed));
 #endif
-                if (!mc_dwell(500)) {
-                    // Something happened while we were dwelling, like a safety door.
-                    unchanged = limit;
-                    last      = _sync_dev_speed;
-                    break;
-                }
+                // if (!mc_dwell(500)) {
+                //     // Something happened while we were dwelling, like a safety door.
+                //     unchanged = limit;
+                //     last      = _sync_dev_speed;
+                //     break;
+                // }
+                delay_ms(500);
 
                 // unchanged counts the number of consecutive times that we see the same speed
                 unchanged = (_sync_dev_speed == last) ? unchanged + 1 : 0;
                 last      = _sync_dev_speed;
             }
+            _last_override_value = sys.spindle_speed_ovr;
+
 #ifdef DEBUG_VFD
             log_debug("Synced speed. Requested:" << int(dev_speed) << " current:" << int(_sync_dev_speed));
 #endif
 
             if (unchanged == limit) {
+                mc_critical(ExecAlarm::SpindleControl);
                 log_error(name() << " spindle did not reach device units " << dev_speed << ". Reported value is " << _sync_dev_speed);
-                mc_reset();
-                rtAlarm = ExecAlarm::SpindleControl;
             }
 
             _syncing = false;
@@ -389,6 +392,7 @@ namespace Spindles {
     }
 
     void VFD::set_mode(SpindleState mode, bool critical) {
+        _last_override_value = sys.spindle_speed_ovr;  // sync these on mode changes
         if (vfd_cmd_queue) {
             VFDaction action;
             action.action   = actionSetMode;
@@ -401,11 +405,19 @@ namespace Spindles {
     }
 
     void IRAM_ATTR VFD::setSpeedfromISR(uint32_t dev_speed) {
+        if (_current_dev_speed == dev_speed || _last_speed == dev_speed) {
+            return;
+        }
+
+        _last_speed = dev_speed;
+
         if (vfd_cmd_queue) {
             VFDaction action;
             action.action   = actionSetSpeed;
             action.arg      = dev_speed;
             action.critical = (dev_speed == 0);
+            // Ignore errors because reporting is not safe from an ISR.
+            // Perhaps set a flag instead?
             xQueueSendFromISR(vfd_cmd_queue, &action, 0);
         }
     }
@@ -416,7 +428,9 @@ namespace Spindles {
             action.action   = actionSetSpeed;
             action.arg      = dev_speed;
             action.critical = dev_speed == 0;
-            xQueueSend(vfd_cmd_queue, &action, 0);
+            if (xQueueSend(vfd_cmd_queue, &action, 0) != pdTRUE) {
+                log_info("VFD Queue Full");
+            }
         }
     }
 
@@ -460,5 +474,25 @@ namespace Spindles {
         }
 
         return crc;
+    }
+    void VFD::validate() {
+        Spindle::validate();
+        Assert(_uart != nullptr || _uart_num != -1, "VFD: missing UART configuration");
+    }
+
+    void VFD::group(Configuration::HandlerBase& handler) {
+        if (handler.handlerType() == Configuration::HandlerType::Generator) {
+            if (_uart_num == -1) {
+                handler.section("uart", _uart, 1);
+            } else {
+                handler.item("uart_num", _uart_num);
+            }
+        } else {
+            handler.section("uart", _uart, 1);
+            handler.item("uart_num", _uart_num);
+        }
+        handler.item("modbus_id", _modbus_id, 0, 247);  // per https://modbus.org/docs/PI_MBUS_300.pdf
+
+        Spindle::group(handler);
     }
 }

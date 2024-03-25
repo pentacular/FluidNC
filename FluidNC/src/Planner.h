@@ -12,11 +12,9 @@
 #include "Config.h"            // MAX_N_AXIS
 #include "SpindleDatatypes.h"  // SpindleState
 #include "GCode.h"             // CoolantState
+#include "Types.h"             // AxisMask
 
 #include <cstdint>
-
-// The number of linear motions in the planner buffer to be planned at any give time.
-const int BLOCK_BUFFER_SIZE = 16;
 
 // Define planner data condition flags. Used to denote running conditions of a block.
 struct PlMotion {
@@ -31,6 +29,7 @@ struct PlMotion {
 struct plan_block_t {
     // Fields used by the bresenham algorithm for tracing the line
     // NOTE: Used by stepper algorithm to execute the block correctly. Do not alter these values.
+
     uint32_t steps[MAX_N_AXIS];  // Step count along each axis
     uint32_t step_event_count;   // The maximum step axis count and number of steps required to complete this block.
     uint8_t  direction_bits;     // The direction bit set for this block (refers to *_DIRECTION_BIT in config.h)
@@ -57,18 +56,23 @@ struct plan_block_t {
 
     // Stored spindle speed data used by spindle overrides and resuming methods.
     SpindleSpeed spindle_speed;  // Block spindle speed. Copied from pl_line_data.
+
+    bool is_jog;
 };
 
 // Planner data prototype. Must be used when passing new motions to the planner.
 struct plan_line_data_t {
-    float        feed_rate;      // Desired feed rate for line motion. Value is ignored, if rapid motion.
-    SpindleSpeed spindle_speed;  // Desired spindle speed through line motion.
-    PlMotion     motion;         // Bitflag variable to indicate motion conditions. See defines above.
-    SpindleState spindle;        // Spindle enable state
-    CoolantState coolant;        // Coolant state
-    int32_t      line_number;    // Desired line number to report when executing.
-    bool         is_jog;         // true if this was generated due to a jog command
+    float        feed_rate;       // Desired feed rate for line motion. Value is ignored, if rapid motion.
+    SpindleSpeed spindle_speed;   // Desired spindle speed through line motion.
+    PlMotion     motion;          // Bitflag variable to indicate motion conditions. See defines above.
+    SpindleState spindle;         // Spindle enable state
+    CoolantState coolant;         // Coolant state
+    int32_t      line_number;     // Desired line number to report when executing.
+    bool         is_jog;          // true if this was generated due to a jog command
+    bool         limits_checked;  // true if soft limits already checked
 };
+
+void plan_init();
 
 // Initialize and reset the motion plan subsystem
 void plan_reset();         // Reset all
@@ -90,8 +94,8 @@ plan_block_t* plan_get_system_motion_block();
 // Gets the current block. Returns NULL if buffer empty
 plan_block_t* plan_get_current_block();
 
-// Called periodically by step segment buffer. Mostly used internally by planner.
-uint8_t plan_next_block_index(uint8_t block_index);
+// Increment block index with wrap-around
+static uint8_t plan_next_block_index(uint8_t block_index);
 
 // Called by step segment buffer when computing executing block velocity profile.
 float plan_get_exec_block_exit_speed_sqr();
@@ -110,10 +114,6 @@ void plan_cycle_reinitialize();
 
 // Returns the number of available blocks are in the planner buffer.
 uint8_t plan_get_block_buffer_available();
-
-// Returns the number of active blocks are in the planner buffer.
-// NOTE: Deprecated. Not used unless classic status reports are enabled in config.h
-uint8_t plan_get_block_buffer_count();
 
 // Returns the status of the block ring buffer. True, if buffer is full.
 uint8_t plan_check_full_buffer();

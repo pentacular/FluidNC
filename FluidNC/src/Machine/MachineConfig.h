@@ -9,23 +9,31 @@
 #include "../Configuration/HandlerBase.h"
 #include "../Configuration/Configurable.h"
 #include "../CoolantControl.h"
+#include "../Kinematics/Kinematics.h"
 #include "../WebUI/BTConfig.h"
 #include "../Control.h"
 #include "../Probe.h"
+#include "src/Parking.h"
 #include "../SDCard.h"
 #include "../Spindles/Spindle.h"
 #include "../Stepping.h"
 #include "../Stepper.h"
-#include "../Logging.h"
-#include "../Network/Network.h"
 #include "../Config.h"
+#include "../OLED.h"
+#include "../Status_outputs.h"
+#include "../Network/Network.h"
 #include "Axes.h"
 #include "SPIBus.h"
+#include "I2CBus.h"
 #include "I2SOBus.h"
 #include "UserOutputs.h"
 #include "Macros.h"
 
+#include <string_view>
+
 namespace Machine {
+    using ::Kinematics::Kinematics;
+
     class Start : public Configuration::Configurable {
     public:
         bool _mustHome          = true;
@@ -35,7 +43,7 @@ namespace Machine {
         // to ensure they are not already active. If so, and hard
         // limits are enabled, Alarm state will be entered instead of
         // Idle and the user will be told to check the limits.
-        bool _checkLimits = false;
+        bool _checkLimits = true;
 
     public:
         Start() {}
@@ -53,25 +61,34 @@ namespace Machine {
     public:
         MachineConfig() = default;
 
-        Axes*           _axes        = nullptr;
-        SPIBus*         _spi         = nullptr;
-        I2SOBus*        _i2so        = nullptr;
-        Stepping*       _stepping    = nullptr;
-        CoolantControl* _coolant     = nullptr;
-        Probe*          _probe       = nullptr;
-        Control*        _control     = nullptr;
-        UserOutputs*    _userOutputs = nullptr;
-        SDCard*         _sdCard      = nullptr;
-        Macros*         _macros      = nullptr;
-        Start*          _start       = nullptr;
-        Network*        _network     = nullptr;
-
+        Axes*                 _axes           = nullptr;
+        Kinematics*           _kinematics     = nullptr;
+        SPIBus*               _spi            = nullptr;
+        I2CBus*               _i2c[MAX_N_I2C] = { nullptr };
+        I2SOBus*              _i2so           = nullptr;
+        Stepping*             _stepping       = nullptr;
+        CoolantControl*       _coolant        = nullptr;
+        Probe*                _probe          = nullptr;
+        Control*              _control        = nullptr;
+        UserOutputs*          _userOutputs    = nullptr;
+        SDCard*               _sdCard         = nullptr;
+        Macros*               _macros         = nullptr;
+        Start*                _start          = nullptr;
+        Parking*              _parking        = nullptr;
+        OLED*                 _oled           = nullptr;
+        Network*              _network        = nullptr;
+        Status_Outputs*       _stat_out       = nullptr;
         Spindles::SpindleList _spindles;
+
+        UartChannel* _uart_channels[MAX_N_UARTS] = { nullptr };
+        Uart*        _uarts[MAX_N_UARTS]         = { nullptr };
 
         float _arcTolerance      = 0.002f;
         float _junctionDeviation = 0.01f;
         bool  _verboseErrors     = false;
         bool  _reportInches      = false;
+
+        size_t _planner_blocks = 16;
 
         // Enables a special set of M-code commands that enables and disables the parking motion.
         // These are controlled by `M56`, `M56 P1`, or `M56 Px` to enable and `M56 P0` to disable.
@@ -82,9 +99,9 @@ namespace Machine {
         // Tracks and reports gcode line numbers. Disabled by default.
         bool _useLineNumbers = false;
 
-        String _board = "None";
-        String _name  = "None";
-        String _meta  = "";
+        std::string _board = "None";
+        std::string _name  = "None";
+        std::string _meta  = "";
 #if 1
         static MachineConfig*& instance() {
             static MachineConfig* instance = nullptr;
@@ -95,11 +112,20 @@ namespace Machine {
         void afterParse() override;
         void group(Configuration::HandlerBase& handler) override;
 
-        static size_t readFile(const char* file, char*& buffer);
-        static bool   load(const char* file);
+        static bool load();
+        static bool load_file(std::string_view file);
+        static bool load_yaml(std::string_view yaml_string);
 
         ~MachineConfig();
     };
 }
 
 extern Machine::MachineConfig* config;
+
+template <typename T>
+void copyAxes(T* dest, T* src) {
+    auto n_axis = config->_axes->_numberAxis;
+    for (size_t axis = 0; axis < n_axis; axis++) {
+        dest[axis] = src[axis];
+    }
+}

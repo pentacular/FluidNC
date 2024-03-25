@@ -21,7 +21,7 @@
 //   HttpPrintServer:
 //     port: 88
 
-class HttpPrintServer : public Configuration::Configurable {
+class HttpPrintServer : public Configuration::Configurable, public Channel {
 private:
     enum State {
         UNSTARTED,
@@ -44,10 +44,16 @@ public:
 
     // Configuration
     const char* name() const;
-    void        validate() const override;
     void        afterParse() override;
     void        group(Configuration::HandlerBase& handler) override;
     void        init();
+
+    // Stream interface.
+    int    read() override { return -1; }
+    int    peek() override { return -1; }
+    void   flush() override {};
+    int    available() override { return 0; }
+    size_t write(uint8_t) override { return 0; }
 
 private:
     void setState(State state);
@@ -56,7 +62,6 @@ private:
     int             _port;
     WiFiServer      _server;
     HttpPrintClient _client;
-    InputClient*    _input_client;  // Owned
 };
 
 #endif  // INCLUDE_HTTP_PRINT_SERVICE

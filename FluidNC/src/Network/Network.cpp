@@ -27,10 +27,6 @@ const char* Network::name() const {
     return "network";
 }
 
-void Network::validate() const {
-    // Do nothing.
-}
-
 void Network::group(Configuration::HandlerBase& handler) {
 #ifdef INCLUDE_HTTP_PRINT_SERVICE
     handler.section("HttpPrintServer", _http_print_server);

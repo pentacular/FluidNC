@@ -10,70 +10,46 @@
 
 #include <cstdint>
 
-class TMC2208Stepper;  // Forward declaration
-class TMC2209Stepper;  // Forward declaration
-
 namespace MotorDrivers {
 
     class TrinamicUartDriver : public TrinamicBase {
-    private:
-        static Uart* _uart;
-
-        static bool _uart_started;
-
-        TMC2208Stepper* tmc2208 = nullptr;
-        TMC2209Stepper* tmc2209 = nullptr;
-
-        bool test();
-        void set_mode(bool isHoming);
-        void trinamic_test_response();
-        void trinamic_stepper_enable(bool enable);
-
-    protected:
-        void config_message() override;
-
     public:
-        TrinamicUartDriver(uint16_t driver_part_number) : TrinamicUartDriver(driver_part_number, -1) {}
-
-        TrinamicUartDriver(uint16_t driver_part_number, uint8_t address);
+        TrinamicUartDriver() = default;
 
         void init() override;
-        void read_settings() override;
-        bool set_homing_mode(bool is_homing) override;
-        void set_disable(bool disable) override;
-
-        void debug_message();
-
-        bool hw_serial_init();
 
         uint8_t _addr;
 
         // Configuration handlers:
-        void validate() const override { StandardStepper::validate(); }
+        void validate() override { StandardStepper::validate(); }
+
+        void afterParse() override {
+            StandardStepper::validate();
+            Assert(_uart_num != -1, "TrinamicUartDriver must set uart_num: ");
+        }
 
         void group(Configuration::HandlerBase& handler) override {
-            handler.section("uart", _uart);
             handler.item("addr", _addr);
+            handler.item("cs_pin", _cs_pin);
+            handler.item("uart_num", _uart_num);
+
             TrinamicBase::group(handler);
         }
 
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "trinamic_uart"; }
+    protected:
+        Uart* _uart = nullptr;
+
+        Pin _cs_pin;
+
+        int _uart_num = -1;
+
+        static bool _uart_started;
+        void        config_message() override;
+
+        uint8_t toffValue();  // TO DO move to Base?
+
+    private:
+
     };
 
-    class TMC2208 : public TrinamicUartDriver {
-    public:
-        TMC2208() : TrinamicUartDriver(2208) {}
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "tmc_2208"; }
-    };
-
-    class TMC2209 : public TrinamicUartDriver {
-    public:
-        TMC2209() : TrinamicUartDriver(2209) {}
-
-        // Name of the configurable. Must match the name registered in the cpp file.
-        const char* name() const override { return "tmc_2209"; }
-    };
 }

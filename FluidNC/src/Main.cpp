@@ -2,61 +2,63 @@
 // Copyright (c) 2018 -	Bart Dring
 // Use of this source code is governed by a GPLv3 license that can be found in the LICENSE file.
 
-#include "Main.h"
-#include "Machine/MachineConfig.h"
+#ifndef UNIT_TEST
 
-#include "Config.h"
-#include "Report.h"
-#include "Settings.h"
-#include "SettingsDefinitions.h"
-#include "Limits.h"
-#include "Protocol.h"
-#include "System.h"
-#include "Uart.h"
-#include "MotionControl.h"
-#include "Platform.h"
+#    include "Main.h"
+#    include "Machine/MachineConfig.h"
 
-#include "WebUI/TelnetServer.h"
-#include "WebUI/Serial2Socket.h"
-#include "WebUI/InputBuffer.h"
+#    include "Config.h"
+#    include "Report.h"
+#    include "Settings.h"
+#    include "SettingsDefinitions.h"
+#    include "Limits.h"
+#    include "Protocol.h"
+#    include "System.h"
+#    include "UartChannel.h"
+#    include "MotionControl.h"
+#    include "Platform.h"
+#    include "StartupLog.h"
 
-#ifdef ENABLE_WIFI
+#    include "WebUI/TelnetServer.h"
+#    include "WebUI/InputBuffer.h"
+
 #    include "WebUI/WifiConfig.h"
-#    include <WiFi.h>
-#endif
-#include <SPIFFS.h>
+#    include "Driver/localfs.h"
 
 extern void make_user_commands();
 
 void setup() {
+    disableCore0WDT();
     try {
+        timing_init();
         uartInit();  // Setup serial port
 
-#ifdef ENABLE_WIFI
-        WiFi.persistent(false);
-        WiFi.disconnect(true);
-        WiFi.enableSTA(false);
-        WiFi.enableAP(false);
-        WiFi.mode(WIFI_OFF);
-#endif
+        StartupLog::init();
 
         // Setup input polling loop after loading the configuration,
         // because the polling may depend on the config
-        client_init();
+        allChannels.init();
+
+        WebUI::WiFiConfig::reset();
 
         display_init();
+
+        protocol_init();
 
         // Load settings from non-volatile storage
         settings_init();  // requires config
 
-        log_info("FluidNC " << git_info);
-        log_info("Compiled with ESP32 SDK:" << ESP.getSdkVersion());
+        log_info("FluidNC " << git_info << " " << git_url);
+        log_info("Compiled with ESP32 SDK:" << esp_get_idf_version());
 
-        if (!SPIFFS.begin(true)) {
-            log_error("Cannot mount the local filesystem");
+        if (localfs_mount()) {
+            log_error("Cannot mount a local filesystem");
+        } else {
+            log_info("Local filesystem type is " << localfsName);
         }
 
-        bool configOkay = config->load(config_filename->get());
+        bool configOkay = config->load();
+
         make_user_commands();
 
         if (configOkay) {
@@ -64,6 +66,17 @@ void setup() {
             log_info("Board " << config->_board);
 
             // The initialization order reflects dependencies between the subsystems
+            for (size_t i = 1; i < MAX_N_UARTS; i++) {
+                if (config->_uarts[i]) {
+                    config->_uarts[i]->begin();
+                }
+            }
+            for (size_t i = 1; i < MAX_N_UARTS; i++) {
+                if (config->_uart_channels[i]) {
+                    config->_uart_channels[i]->init();
+                }
+            }
+
             if (config->_i2so) {
                 config->_i2so->init();
             }
@@ -74,8 +87,23 @@ void setup() {
                     config->_sdCard->init();
                 }
             }
+            for (size_t i = 0; i < MAX_N_I2C; i++) {
+                if (config->_i2c[i]) {
+                    config->_i2c[i]->init();
+                }
+            }
 
-            Stepper::init();  // Configure stepper pins and interrupt timers
+            if (config->_oled) {
+                config->_oled->init();
+            }
+
+            if (config->_stat_out) {
+                config->_stat_out->init();
+            }
+
+            config->_stepping->init();  // Configure stepper interrupt timers
+
+            plan_init();
 
             config->_userOutputs->init();
 
@@ -83,33 +111,13 @@ void setup() {
 
             config->_control->init();
 
-            memset(motor_steps, 0, sizeof(motor_steps));  // Clear machine position.
+            config->_kinematics->init();
 
-            machine_init();  // user supplied function for special initialization
+            limits_init();
         }
 
         // Initialize system state.
         if (sys.state != State::ConfigAlarm) {
-            if (FORCE_INITIALIZATION_ALARM) {
-                // Force ALARM state upon a power-cycle or hard reset.
-                sys.state = State::Alarm;
-            } else {
-                sys.state = State::Idle;
-            }
-
-            limits_init();
-
-            // Check for power-up and set system alarm if homing is enabled to force homing cycle
-            // by setting alarm state. Alarm locks out all g-code commands, including the
-            // startup scripts, but allows access to settings and internal commands. Only a homing
-            // cycle '$H' or kill alarm locks '$X' will disable the alarm.
-            // NOTE: The startup script will run after successful completion of the homing cycle, but
-            // not after disabling the alarm locks. Prevents motion startup blocks from crashing into
-            // things uncontrollably. Very bad.
-            if (config->_start->_mustHome && Machine::Axes::homingMask) {
-                // If there is an axis with homing configured, enter Alarm state on startup
-                sys.state = State::Alarm;
-            }
             for (auto s : config->_spindles) {
                 s->init();
             }
@@ -119,59 +127,26 @@ void setup() {
             config->_probe->init();
         }
 
-#ifdef ENABLE_WIFI
-        WebUI::wifi_config.begin();
-        register_client(&WebUI::Serial2Socket);
-        register_client(&WebUI::telnet_server);
-#endif
-#ifdef ENABLE_BLUETOOTH
-        WebUI::bt_config.begin();
-        register_client(&WebUI::SerialBT);
-#endif
-        WebUI::inputBuffer.begin();
-
-        // Do this after wifi gets a chance to start.
-        if (config->_network) {
-            config->_network->init();
-        }
     } catch (const AssertionFailed& ex) {
         // This means something is terribly broken:
         log_error("Critical error in main_init: " << ex.what());
         sys.state = State::ConfigAlarm;
     }
-}
 
-static void reset_variables() {
-    // Reset primary systems.
-    system_reset();
-    protocol_reset();
-    gc_init();  // Set g-code parser to default state
-    // Spindle should be set either by the configuration
-    // or by the post-configuration fixup, but we test
-    // it anyway just for safety.  We want to avoid any
-    // possibility of crashing at this point.
-
-    plan_reset();  // Clear block buffer and planner variables
-
-    if (sys.state != State::ConfigAlarm) {
-        if (spindle) {
-            spindle->stop();
-            report_ovr_counter = 0;  // Set to report change immediately
-        }
-        Stepper::reset();  // Clear stepper subsystem variables
+    // Try Bluetooth first so its memory can be released if it is disabled
+    if (!WebUI::bt_config.begin()) {
+        WebUI::wifi_config.begin();
     }
 
-    // Sync cleared gcode and planner positions to current system position.
-    plan_sync_position();
-    gc_sync_position();
-    report_init_message(allClients);
-    mc_init();
+    allChannels.ready();
+    allChannels.deregistration(&startupLog);
+    protocol_send_event(&startEvent);
 }
 
 void loop() {
+    vTaskPrioritySet(NULL, 2);
     static int tries = 0;
     try {
-        reset_variables();
         // Start the main loop. Processes program inputs and executes them.
         // This can exit on a system abort condition, in which case run_once()
         // is re-executed by an enclosing loop.  It can also exit via a
@@ -202,11 +177,7 @@ void loop() {
 
 void WEAK_LINK machine_init() {}
 
-void WEAK_LINK display_init() {}
-
-void WEAK_LINK display(const char* tag, String s) {}
-
-#if 0
+#    if 0
 int main() {
     setup();  // setup()
     while (1) {   // loop()
@@ -214,4 +185,6 @@ int main() {
     }
     return 0;
 }
+#    endif
+
 #endif

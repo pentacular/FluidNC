@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Spindle.h"
+#include "../Types.h"
 
 #include "../Uart.h"
 
@@ -20,9 +21,10 @@ namespace Spindles {
         static const int MAX_RETRIES            = 5;   // otherwise the spindle is marked 'unresponsive'
 
         void set_mode(SpindleState mode, bool critical);
-        bool get_pins_and_settings();
 
-        int32_t _current_dev_speed = -1;
+        int32_t  _current_dev_speed   = -1;
+        uint32_t _last_speed          = 0;
+        Percent  _last_override_value = 100;  // no override is 100 percent
 
         static QueueHandle_t vfd_cmd_queue;
         static TaskHandle_t  vfd_cmdTaskHandle;
@@ -64,10 +66,11 @@ namespace Spindles {
         virtual response_parser get_current_speed(ModbusCommand& data) { return nullptr; }
         virtual response_parser get_current_direction(ModbusCommand& data) { return nullptr; }
         virtual response_parser get_status_ok(ModbusCommand& data) = 0;
-        
         virtual bool            safety_polling() const { return true; }
+        bool                    use_delay_settings() const override { return true; }
 
         // The constructor sets these
+        int     _uart_num  = -1;
         Uart*   _uart      = nullptr;
         uint8_t _modbus_id = 1;
 
@@ -91,17 +94,8 @@ namespace Spindles {
         SpindleSpeed      _slop;
 
         // Configuration handlers:
-        void validate() const override {
-            Spindle::validate();
-            Assert(_uart != nullptr, "VFD: missing UART configuration");
-        }
-
-        void group(Configuration::HandlerBase& handler) override {
-            handler.section("uart", _uart);
-            handler.item("modbus_id", _modbus_id);
-
-            Spindle::group(handler);
-        }
+        void validate() override;
+        void group(Configuration::HandlerBase& handler) override;
 
         virtual ~VFD() {}
     };

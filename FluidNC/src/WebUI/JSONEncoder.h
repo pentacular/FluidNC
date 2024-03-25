@@ -1,7 +1,7 @@
 #pragma once
 
-#include <WString.h>
-#include <Print.h>
+#include "../Channel.h"
+#include <string>
 
 // Class for creating JSON-encoded strings.
 
@@ -10,42 +10,48 @@ namespace WebUI {
     private:
         static const int MAX_JSON_LEVEL = 16;
 
-        bool   pretty;
-        int    level;
-        String str;
-        int    count[MAX_JSON_LEVEL];
-        void   add(char c);
-        void   comma_line();
-        void   comma();
-        void   quoted(const char* s);
-        void   inc_level();
-        void   dec_level();
-        void   line();
-        Print* stream;
+        bool _encapsulate = false;
+        int  level;
+        int  count[MAX_JSON_LEVEL];
+        void add(char c);
+        void comma_line();
+        void comma();
+        void inc_level();
+        void dec_level();
+        void indent();
+        void line();
 
-        String category;
+        void quoted(const char* s);
+
+        // begin_member() starts the creation of a member.
+        void begin_member(const char* tag);
+
+        std::string linebuf;
+
+        std::string* _str     = nullptr;
+        Channel*     _channel = nullptr;
+
+        std::string category;
+
+        void flush();
 
     public:
-        // If you don't set _pretty it defaults to false
-        JSONencoder();
-
-        // Constructor; set _pretty true for pretty printing
-        JSONencoder(bool pretty);
-
-        // Constructor; set _pretty true for pretty printing
-        JSONencoder(bool pretty, Print* s);
+        // Constructor; set _encapsulate true for [MSG:JSON: ,,,] encapsulation
+        JSONencoder(bool encapsulate, Channel* channel);
+        JSONencoder(std::string* str);
 
         // begin() starts the encoding process.
         void begin();
 
         void setCategory(const char* cat) { category = cat; }
 
-        // end() returns the encoded string
-        String end();
+        void end();
+
+        void string(const char* s);
 
         // member() creates a "tag":"value" element
         void member(const char* tag, const char* value);
-        void member(const char* tag, String value);
+        void member(const char* tag, const std::string& value);
         void member(const char* tag, int value);
 
         // begin_array() starts a "tag":[  array element
@@ -60,10 +66,9 @@ namespace WebUI {
         // end_object() closes the object with }
         void end_object();
 
-        // begin_member() starts the creation of a member.
-        // The only case where you need to use it directly
-        // is when you want a member whose value is an object.
-        void begin_member(const char* tag);
+        // Begins the creation of a member whose value is an object.
+        // Call end_object() to close the member
+        void begin_member_object(const char* tag);
 
         // The begin_webui() methods are specific to Esp3D_WebUI
         // WebUI sends JSON objects to the UI to generate configuration
@@ -86,6 +91,9 @@ namespace WebUI {
         //  S => 0 .. 255
         //  A => 7 .. 15  (0.0.0.0 .. 255.255.255.255)
         //  I => 0 .. 2^31-1
+        void begin_webui(const char* brief, const char* full, const char* type, const std::string val) {
+            begin_webui(brief, full, type, val.c_str());
+        }
         void begin_webui(const char* brief, const char* full, const char* type, const char* val);
         void begin_webui(const char* brief, const char* full, const char* type, const int val);
         void begin_webui(const char* brief, const char* full, const char* type, const char* val, int min, int max);

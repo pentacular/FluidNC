@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Channel.h"
 #include "../Config.h"
 
 #ifdef INCLUDE_HTTP_PRINT_SERVICE
@@ -12,7 +13,7 @@
 // The remainder of the data is output via single character read().
 // isFinished() indicates that the client is closed and exhausted.
 
-class HttpPrintClient : public Stream {
+class HttpPrintClient : public Channel {
     enum State {
         READING_HEADER,
         READING_DATA,

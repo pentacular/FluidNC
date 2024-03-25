@@ -33,18 +33,20 @@
  */
 
 #include "xmodem.h"
-#include <freertos/FreeRTOS.h>
 
-static Uart*  serialPort;
-static Print* file;
+static Channel* serialPort;
+static Print*   file;
 
 static int _inbyte(uint16_t timeout) {
     uint8_t data;
-    auto    res = serialPort->readBytes(&data, 1, timeout);
+    auto    res = serialPort->timedReadBytes(&data, 1, timeout);
     return res != 1 ? -1 : data;
 }
 static void _outbyte(int c) {
     serialPort->write((uint8_t)c);
+}
+static void _outbytes(uint8_t* buf, size_t len) {
+    serialPort->write(buf, len);
 }
 
 /* CRC16 implementation acording to CCITT standards */
@@ -69,8 +71,8 @@ static const uint16_t crc16tab[256] = {
 };
 
 uint16_t crc16_ccitt(const uint8_t* buf, size_t len) {
-    register int      counter;
-    register uint16_t crc = 0;
+    int      counter;
+    uint16_t crc = 0;
     for (counter = 0; counter < len; counter++)
         crc = (crc << 8) ^ crc16tab[((crc >> 8) ^ *buf++) & 0x00FF];
     return crc;
@@ -123,33 +125,35 @@ static void flushinput(void) {
 // control-Z's.  Doing the control-Z removal only on the final
 // packet avoids removing interior control-Z's that happen to
 // land at the end of a packet.
-static bool    held = false;
 static uint8_t held_packet[1024];
+static size_t  held_packet_len;
 static void    flush_packet(size_t packet_len, size_t& total_len) {
-    if (held) {
+    if (held_packet_len > 0) {
         // Remove trailing ctrl-z's on the final packet
         size_t count;
-        for (count = packet_len; count > 0; --count) {
+        for (count = held_packet_len; count > 0; --count) {
             if (held_packet[count - 1] != CTRLZ) {
                 break;
             }
         }
         file->write(held_packet, count);
         total_len += count;
+        held_packet_len = 0;
     }
 }
 static void write_packet(uint8_t* buf, size_t packet_len, size_t& total_len) {
-    if (held) {
-        file->write(held_packet, packet_len);
-        total_len += packet_len;
+    if (held_packet_len > 0) {
+        file->write(held_packet, held_packet_len);
+        total_len += held_packet_len;
+        held_packet_len = 0;
     }
     memcpy(held_packet, buf, packet_len);
-    held = true;
+    held_packet_len = packet_len;
 }
-int xmodemReceive(Uart* serial, Print* out) {
-    vTaskDelay(1000);
-    serialPort = serial;
-    file       = out;
+int xmodemReceive(Channel* serial, FileStream* out) {
+    serialPort      = serial;
+    file            = out;
+    held_packet_len = 0;
 
     uint8_t  xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
     uint8_t* p;
@@ -234,7 +238,7 @@ int xmodemReceive(Uart* serial, Print* out) {
     }
 }
 
-int xmodemTransmit(Uart* serial, Stream* in) {
+int xmodemTransmit(Channel* serial, FileStream* infile) {
     serialPort = serial;
 
     uint8_t xbuff[1030]; /* 1024 for XModem 1k + 3 head chars + 2 crc + nul */
@@ -284,7 +288,7 @@ int xmodemTransmit(Uart* serial, Stream* in) {
             xbuff[1] = packetno;
             xbuff[2] = ~packetno;
 
-            auto nbytes = in->readBytes(&xbuff[3], bufsz);
+            auto nbytes = infile->read(&xbuff[3], bufsz);
             if (nbytes > 0) {
                 while (nbytes < bufsz) {
                     xbuff[3 + nbytes] = CTRLZ;
@@ -302,9 +306,7 @@ int xmodemTransmit(Uart* serial, Stream* in) {
                     xbuff[bufsz + 3] = ccks;
                 }
                 for (retry = 0; retry < MAXRETRANS; ++retry) {
-                    for (i = 0; i < bufsz + 4 + (crc ? 1 : 0); ++i) {
-                        _outbyte(xbuff[i]);
-                    }
+                    _outbytes(xbuff, bufsz + 4 + (crc ? 1 : 0));
                     if ((c = _inbyte(DLY_1S)) >= 0) {
                         switch (c) {
                             case ACK:

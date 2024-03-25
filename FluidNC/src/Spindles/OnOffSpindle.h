@@ -43,10 +43,10 @@ namespace Spindles {
 
         // Methods introduced by this base clase
         virtual void set_direction(bool Clockwise);
-        void         set_enable(bool enable);
+        virtual void set_enable(bool enable);
 
         // Configuration handlers:
-        void validate() const override { Spindle::validate(); }
+        void validate() override { Spindle::validate(); }
 
         void group(Configuration::HandlerBase& handler) override {
             handler.item("direction_pin", _direction_pin);

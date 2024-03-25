@@ -1,4 +1,5 @@
 #include "../Config.h"
+#include "../Serial.h"
 
 #ifdef INCLUDE_HTTP_PRINT_SERVICE
 
@@ -16,7 +17,7 @@ namespace {
     };
 }
 
-HttpPrintServer::HttpPrintServer() : _state(UNSTARTED), _port(0) {}
+HttpPrintServer::HttpPrintServer() : _state(UNSTARTED), _port(0), Channel("HttpPrintServer") {}
 
 bool HttpPrintServer::begin() {
     if (_state != UNSTARTED || _port == 0) {
@@ -25,6 +26,7 @@ bool HttpPrintServer::begin() {
     _server = WiFiServer(_port);
     _server.begin();
     setState(IDLE);
+    allChannels.registration(this);
     return true;
 }
 
@@ -32,6 +34,7 @@ void HttpPrintServer::stop() {
     if (_state == STOPPED) {
         return;
     }
+    allChannels.deregistration(this);
     _server.stop();
     setState(STOPPED);
 }
@@ -45,17 +48,15 @@ void HttpPrintServer::handle() {
             if (_server.hasClient()) {
                 _client = HttpPrintClient(_server.available());
                 setState(PRINTING);
-                _input_client = register_client(&_client);
+                allChannels.registration(&_client);
             }
             return;
         case PRINTING:
             if (_client.is_done()) {
                 // Remove the client from the polling cycle.
-                unregister_client(_input_client);
-                delete _input_client;
-                _input_client = nullptr;
+                allChannels.deregistration(&_client);
                 if (_client.is_aborted()) {
-                    log_info("HttpPrintServer: Setting HOLD due to aborted upload");
+                    log_debug("HttpPrintServer: Setting HOLD due to aborted upload");
                     rtFeedHold = true;
                 }
                 setState(IDLE);
@@ -66,23 +67,19 @@ void HttpPrintServer::handle() {
 
 void HttpPrintServer::setState(State state) {
     if (_state != state) {
-        log_info("HttpPrintServer: " << _state_name[state]);
+        log_debug("HttpPrintServer: " << _state_name[state]);
         _state = state;
     }
 }
 
 void HttpPrintServer::init() {
-    log_info("HttpPrintServer init");
+    log_debug("HttpPrintServer init");
     begin();
-    log_info("HttpPrintServer port=" << _port);
+    log_debug("HttpPrintServer port=" << _port);
 }
 
 const char* HttpPrintServer::name() const {
     return "HttpPrintServer";
-}
-
-void HttpPrintServer::validate() const {
-    // Do nothing.
 }
 
 void HttpPrintServer::group(Configuration::HandlerBase& handler) {

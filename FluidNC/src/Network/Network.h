@@ -20,7 +20,6 @@ public:
 
     // Configuration
     const char* name() const;
-    void        validate() const override;
     void        afterParse() override;
     void        group(Configuration::HandlerBase& handler) override;
 

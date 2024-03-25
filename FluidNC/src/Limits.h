@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "System.h"  // AxisMask
+#include "System.h"
 
 #include <cstdint>
 
@@ -15,9 +15,10 @@ void limits_init();
 
 // Returns limit state
 MotorMask limits_get_state();
+bool      limits_startup_check();
 
-// Check for soft limit violations
-void limits_soft_check(float* target);
+void limit_error();
+void limit_error(size_t axis, float cordinate);
 
 float limitsMaxPosition(size_t axis);
 float limitsMinPosition(size_t axis);
@@ -31,7 +32,6 @@ AxisMask limits_check(AxisMask check_mask);
 void limitCheckTask(void* pvParameters);
 
 bool limitsCheckTravel(float* target);
-bool user_defined_homing(AxisMask cycle_mask);
 
 // True if an axis is reporting engaged limits on both ends.  This
 // typically happens when the same pin is used for a pair of switches,

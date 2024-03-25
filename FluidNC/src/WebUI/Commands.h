@@ -7,12 +7,12 @@
 namespace WebUI {
     class COMMANDS {
     public:
-        static void wait(uint32_t milliseconds);
         static void handle();
-        static void restart_ESP();
-        static bool isLocalPasswordValid(char* password);
+        static void restart_MCU();
+        static void send_json_command_response(Channel& out, uint cmdID, bool isok = true, std::string message = "");
+        static bool isJSON(const char* cmd_params);
 
     private:
-        static bool restart_ESP_module;
+        static bool _restart_MCU;
     };
 }

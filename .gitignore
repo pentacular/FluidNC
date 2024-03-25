@@ -24,3 +24,10 @@ pio_machine.h
 project.checksum
 version.cpp
 esptool*.zip
+v*.zip
+/FluidNC/data/config.yaml
+build/
+dist/
+*.cppx
+*.hx
+/compile_commands.json
