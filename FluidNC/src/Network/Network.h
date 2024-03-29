@@ -1,8 +1,8 @@
 #pragma once
 
 #include "HttpBatchClient.h"
-#include "HttpLogClient.h"
 #include "HttpRealtimeClient.h"
+#include "HttpStatusClient.h"
 #include "HttpServer.h"
 
 #include "../Config.h"
@@ -30,6 +30,6 @@ public:
 
 private:
     HttpServer<HttpBatchClient>* _http_batch_server;
-    HttpServer<HttpLogClient>* _http_log_server;
+    HttpServer<HttpStatusClient>* _http_status_server;
     HttpServer<HttpRealtimeClient>* _http_realtime_server;
 };

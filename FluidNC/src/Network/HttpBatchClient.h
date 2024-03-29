@@ -22,6 +22,7 @@ public:
     };
 
     HttpBatchClient(const char* name, WiFiClient wifi_client);
+    ~HttpBatchClient();
 
     void abort();
     void advance();

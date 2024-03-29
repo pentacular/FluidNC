@@ -85,7 +85,7 @@ static const int coordStringLen = 20;
 static const int axesStringLen  = coordStringLen * MAX_N_AXIS;
 
 // Sends the axis values to the output channel
-static std::string report_util_axis_values(const float* axis_value) {
+std::string report_util_axis_values(const float* axis_value) {
     std::ostringstream msg;
     auto               n_axis = config->_axes->_numberAxis;
     for (size_t idx = 0; idx < n_axis; idx++) {

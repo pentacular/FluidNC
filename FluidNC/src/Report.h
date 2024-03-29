@@ -83,6 +83,8 @@ void reportTaskStackSize(UBaseType_t& saved);
 
 void hex_msg(uint8_t* buf, const char* prefix, int len);
 
+std::string report_util_axis_values(const float* axis_value);
+
 void addPinReport(char* status, char pinLetter);
 
 #include "MyIOStream.h"

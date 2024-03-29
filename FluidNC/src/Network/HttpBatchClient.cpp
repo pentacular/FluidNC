@@ -1,4 +1,5 @@
 #include "../Config.h"
+#include "../Serial.h"
 
 #define RETRY -1
 
@@ -43,7 +44,13 @@ HttpBatchClient::HttpBatchClient(const char *name, WiFiClient wifi_client) :
     Channel(name),
     _state(READING_OPTIONS_HEADER), _wifi_client(wifi_client), _content_read(0),
     _content_size(0), _data_read(0), _data_size(0), _aborted(false), _need_ack(false) {
+      // Move this out of the constructor.
+      allChannels.registration(this);
     }
+
+HttpBatchClient::~HttpBatchClient() {
+  allChannels.deregistration(this);
+}
 
 bool HttpBatchClient::is_done() {
     return _state == FINISHED;
