@@ -22,7 +22,7 @@ public:
     };
 
     HttpBatchClient(const char* name, WiFiClient wifi_client);
-    ~HttpBatchClient();
+    virtual ~HttpBatchClient();
 
     void abort();
     void advance();
@@ -31,7 +31,7 @@ public:
     void set_ack();
     bool is_aborted();
     bool is_done();
-    bool need_ack();
+    virtual bool need_ack();
 
     void handle() override;
 

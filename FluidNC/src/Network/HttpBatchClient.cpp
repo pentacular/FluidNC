@@ -44,9 +44,8 @@ HttpBatchClient::HttpBatchClient(const char *name, WiFiClient wifi_client) :
     Channel(name),
     _state(READING_OPTIONS_HEADER), _wifi_client(wifi_client), _content_read(0),
     _content_size(0), _data_read(0), _data_size(0), _aborted(false), _need_ack(false) {
-      // Move this out of the constructor.
-      allChannels.registration(this);
-    }
+  allChannels.registration(this);
+}
 
 HttpBatchClient::~HttpBatchClient() {
   allChannels.deregistration(this);
@@ -76,7 +75,6 @@ void HttpBatchClient::set_state(State state) {
     if (_state != state) {
         // Show the state changes so we can see what's happening via other
         // clients.
-        // log_debug("HttpBatchClient: " << _state_name[state]);
         _state = state;
     }
 }
