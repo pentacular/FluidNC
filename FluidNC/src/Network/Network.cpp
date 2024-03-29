@@ -1,26 +1,32 @@
-#include "../Config.h"
-
-#include "Network.h"
-#include "../Logging.h"
 #include "../Settings.h"
 
-void Network::init() {
-    // Do nothing.
-    log_info("Network init");
+#include "Network.h"
 
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-    if (_http_print_server) {
-        _http_print_server->init();
+#include "../Config.h"
+#include "../Logging.h"
+
+void Network::init() {
+    if (_http_batch_server) {
+        _http_batch_server->init();
     }
-#endif  // INCLUDE_HTTP_PRINT_SERVICE
+    if (_http_log_server) {
+        _http_log_server->init();
+    }
+    if (_http_realtime_server) {
+        _http_realtime_server->init();
+    }
 }
 
 void Network::handle() {
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-    if (_http_print_server) {
-        _http_print_server->handle();
+    if (_http_batch_server) {
+        _http_batch_server->handle();
     }
-#endif  // INCLUDE_HTTP_PRINT_SERVICE
+    if (_http_log_server) {
+        _http_log_server->handle();
+    }
+    if (_http_realtime_server) {
+        _http_realtime_server->handle();
+    }
 }
 
 const char* Network::name() const {
@@ -28,11 +34,41 @@ const char* Network::name() const {
 }
 
 void Network::group(Configuration::HandlerBase& handler) {
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-    handler.section("HttpPrintServer", _http_print_server);
-#endif
+    handler.section("http_batch_server", _http_batch_server);
+    handler.section("http_log_server", _http_log_server);
+    handler.section("http_realtime_server", _http_realtime_server);
 }
 
 void Network::afterParse() {
     // Do nothing.
+}
+
+template<>
+const char* HttpServer<HttpBatchClient>::name() const {
+  return "HttpBatchServer";
+}
+
+template<>
+const char* HttpServer<HttpBatchClient>::client_name() const {
+  return "HttpBatchClient";
+}
+
+template<>
+const char* HttpServer<HttpLogClient>::name() const {
+  return "HttpLogServer";
+}
+
+template<>
+const char* HttpServer<HttpLogClient>::client_name() const {
+  return "HttpLogClient";
+}
+
+template<>
+const char* HttpServer<HttpRealtimeClient>::name() const {
+  return "HttpRealtimeServer";
+}
+
+template<>
+const char* HttpServer<HttpRealtimeClient>::client_name() const {
+  return "HttpRealtimeClient";
 }

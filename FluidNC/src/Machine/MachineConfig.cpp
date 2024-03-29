@@ -60,7 +60,6 @@ namespace Machine {
         handler.section("coolant", _coolant);
         handler.section("probe", _probe);
         handler.section("macros", _macros);
-        handler.section("network", _network);
         handler.section("start", _start);
         handler.section("parking", _parking);
 
@@ -79,6 +78,8 @@ namespace Machine {
         handler.item("enable_parking_override_control", _enableParkingOverrideControl);
         handler.item("use_line_numbers", _useLineNumbers);
         handler.item("planner_blocks", _planner_blocks, 10, 120);
+
+        handler.section("network", _network);
     }
 
     void MachineConfig::afterParse() {

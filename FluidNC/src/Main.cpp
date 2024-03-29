@@ -138,6 +138,8 @@ void setup() {
         WebUI::wifi_config.begin();
     }
 
+    config->_network->init();
+
     allChannels.ready();
     allChannels.deregistration(&startupLog);
     protocol_send_event(&startEvent);

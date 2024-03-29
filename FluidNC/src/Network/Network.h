@@ -1,10 +1,12 @@
 #pragma once
 
+#include "HttpBatchClient.h"
+#include "HttpLogClient.h"
+#include "HttpRealtimeClient.h"
+#include "HttpServer.h"
+
 #include "../Config.h"
-
 #include "../Configuration/Configurable.h"
-
-#include "HttpPrintServer.h"
 
 class Network : public Configuration::Configurable {
 public:
@@ -27,7 +29,7 @@ public:
     virtual ~Network() {}
 
 private:
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-    HttpPrintServer* _http_print_server;
-#endif
+    HttpServer<HttpBatchClient>* _http_batch_server;
+    HttpServer<HttpLogClient>* _http_log_server;
+    HttpServer<HttpRealtimeClient>* _http_realtime_server;
 };

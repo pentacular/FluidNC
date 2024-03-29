@@ -207,6 +207,7 @@ Channel* Channel::pollLine(char* line) {
         }
 
         if (lineComplete(line, ch)) {
+            log_debug("line=" << line);
             return this;
         }
     }

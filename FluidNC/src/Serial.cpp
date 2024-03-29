@@ -243,5 +243,7 @@ Channel* pollChannels(char* line) {
     WebUI::COMMANDS::handle();      // Handles ESP restart
     WebUI::wifi_services.handle();  // OTA, webServer, telnetServer polling
 
+    config->_network->handle();
+
     return retval;
 }

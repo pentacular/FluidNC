@@ -1,9 +1,5 @@
 #pragma once
 
-#include "../Config.h"
-
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-
 #    include <WiFi.h>
 
 #    include "../Configuration/Configurable.h"
@@ -21,7 +17,7 @@
 //   HttpPrintServer:
 //     port: 88
 
-class HttpPrintServer : public Configuration::Configurable, public Channel {
+class HttpPrintServer : public Configuration::Configurable {
 private:
     enum State {
         UNSTARTED,
@@ -48,20 +44,11 @@ public:
     void        group(Configuration::HandlerBase& handler) override;
     void        init();
 
-    // Stream interface.
-    int    read() override { return -1; }
-    int    peek() override { return -1; }
-    void   flush() override {};
-    int    available() override { return 0; }
-    size_t write(uint8_t) override { return 0; }
-
 private:
     void setState(State state);
 
     enum State      _state;
     int             _port;
     WiFiServer      _server;
-    HttpPrintClient _client;
+    std::unique_ptr<HttpPrintClient> _client;
 };
-
-#endif  // INCLUDE_HTTP_PRINT_SERVICE

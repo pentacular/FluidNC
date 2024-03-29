@@ -1,8 +1,6 @@
 #include "../Config.h"
 #include "../Serial.h"
 
-#ifdef INCLUDE_HTTP_PRINT_SERVICE
-
 #    include "../Protocol.h"
 #    include "../Settings.h"
 
@@ -17,7 +15,8 @@ namespace {
     };
 }
 
-HttpPrintServer::HttpPrintServer() : _state(UNSTARTED), _port(0), Channel("HttpPrintServer") {}
+HttpPrintServer::HttpPrintServer() : _state(UNSTARTED), _port(0) {
+}
 
 bool HttpPrintServer::begin() {
     if (_state != UNSTARTED || _port == 0) {
@@ -26,7 +25,6 @@ bool HttpPrintServer::begin() {
     _server = WiFiServer(_port);
     _server.begin();
     setState(IDLE);
-    allChannels.registration(this);
     return true;
 }
 
@@ -34,7 +32,6 @@ void HttpPrintServer::stop() {
     if (_state == STOPPED) {
         return;
     }
-    allChannels.deregistration(this);
     _server.stop();
     setState(STOPPED);
 }
@@ -46,19 +43,24 @@ void HttpPrintServer::handle() {
             return;
         case IDLE:
             if (_server.hasClient()) {
-                _client = HttpPrintClient(_server.available());
+                _client = std::make_unique<HttpPrintClient>(_server.available());
                 setState(PRINTING);
-                allChannels.registration(&_client);
+                log_debug("HttpPrintServer: register client");
+                allChannels.registration(_client.get());
+                log_debug("HttpPrintServer: register client done");
             }
             return;
         case PRINTING:
-            if (_client.is_done()) {
+            _client->handle();
+            if (_client->is_done()) {
                 // Remove the client from the polling cycle.
-                allChannels.deregistration(&_client);
-                if (_client.is_aborted()) {
+                log_debug("HttpPrintServer: deregister client");
+                allChannels.deregistration(_client.get());
+                if (_client->is_aborted()) {
                     log_debug("HttpPrintServer: Setting HOLD due to aborted upload");
-                    rtFeedHold = true;
+                    protocol_send_event(&feedHoldEvent);
                 }
+                _client.reset();
                 setState(IDLE);
             }
             return;
@@ -67,15 +69,12 @@ void HttpPrintServer::handle() {
 
 void HttpPrintServer::setState(State state) {
     if (_state != state) {
-        log_debug("HttpPrintServer: " << _state_name[state]);
         _state = state;
     }
 }
 
 void HttpPrintServer::init() {
-    log_debug("HttpPrintServer init");
-    begin();
-    log_debug("HttpPrintServer port=" << _port);
+  begin();
 }
 
 const char* HttpPrintServer::name() const {
@@ -87,7 +86,4 @@ void HttpPrintServer::group(Configuration::HandlerBase& handler) {
 }
 
 void HttpPrintServer::afterParse() {
-    // Do nothing.
 }
-
-#endif  // INCLUDE_HTTP_PRINT_SERVICE
