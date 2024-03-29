@@ -79,6 +79,8 @@ void protocol_reset() {
 }
 
 static int32_t idleEndTime = 0;
+static bool froCheckEnable = false;
+static int32_t froCheckTime = 0;
 
 /*
   PRIMARY LOOP:
@@ -234,6 +236,20 @@ void     protocol_main_loop() {
             idleEndTime = 0;  //
             config->_axes->set_disable(true);
         }
+        if (froCheckEnable && (getCpuTicks() - froCheckTime) > 0) {
+            froCheckTime = usToEndTicks(10000); // 10ms cycle
+#if 1
+            if (config->_probe->get_state()) {
+              // too noisy
+              // protocol_send_event(&feedOverrideEvent, -FeedOverride::CoarseIncrement);
+              protocol_send_event(&feedOverrideEvent, -100);
+            } else {
+              // not too noisy
+              // protocol_send_event(&feedOverrideEvent, FeedOverride::FineIncrement);
+              protocol_send_event(&feedOverrideEvent, 1);
+            }
+#endif
+        }
         uint32_t newHeapSize = xPortGetFreeHeapSize();
         if (newHeapSize < heapLowWater) {
             heapLowWater = newHeapSize;
@@ -303,6 +319,7 @@ void protocol_execute_realtime() {
 
 static void protocol_run_startup_lines() {
     settings_execute_startup();  // Execute startup script.
+    froCheckEnable = true;
 }
 
 static void protocol_do_restart() {
@@ -734,8 +751,11 @@ void protocol_do_cycle_stop() {
 
 static void update_velocities() {
     report_ovr_counter = 0;  // Set to report change immediately
+    plan_validate(1);
     plan_update_velocity_profile_parameters();
+    plan_validate(2);
     plan_cycle_reinitialize();
+    plan_validate(3);
 }
 
 // This is the final phase of the shutdown activity for a reset
@@ -912,6 +932,7 @@ static void protocol_do_feed_override(void* incrementvp) {
         }
     }
     if (percent != sys.f_override) {
+        log_debug("FRO: " << percent);
         sys.f_override = percent;
         update_velocities();
     }
