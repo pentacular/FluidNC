@@ -5,6 +5,7 @@
 #include "HttpRealtimeClient.h"
 #include "HttpStatusClient.h"
 #include "HttpServer.h"
+#include "HttpUploadClient.h"
 
 #include "../Config.h"
 #include "../Configuration/Configurable.h"
@@ -31,6 +32,8 @@ public:
 
 private:
     HttpServer<HttpBatchClient>* _http_batch_server;
+    HttpServer<HttpUploadClient>* _http_sd_upload_server;
+    HttpServer<HttpUploadClient>* _http_localfs_upload_server;
     HttpServer<HttpLogClient>* _http_log_server;
     HttpServer<HttpStatusClient>* _http_status_server;
     HttpServer<HttpRealtimeClient>* _http_realtime_server;

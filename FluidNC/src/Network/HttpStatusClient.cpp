@@ -7,35 +7,35 @@
 
 #define RETRY -1
 
-#    include <lwip/sockets.h>
+#include <lwip/sockets.h>
 
 // A workaround for an issue in lwip/sockets.h
 // See https://github.com/espressif/arduino-esp32/issues/4073
-#    undef IPADDR_NONE
+#undef IPADDR_NONE
 
-#    include "../System.h"
-#    include "HttpStatusClient.h"
+#include "../System.h"
+#include "HttpStatusClient.h"
 
 namespace {
-    const char* _state_name[4] = {
-        "WRITING_HEADER",
-        "LOGGING",
-        "FINISHED",
-    };
+  const char* _state_name[4] = {
+    "WRITING_HEADER",
+    "LOGGING",
+    "FINISHED",
+  };
 
-    const char content_length[] = "Content-Length:";
+  const char content_length[] = "Content-Length:";
 
-    const char header_delimiter[] = "\r\n";
+  const char header_delimiter[] = "\r\n";
 
-    // The print completed successfully.
-    const char ok_200[] = "HTTP/1.1 200 OK\r\n"
-                          "Access-Control-Allow-Origin: *" "\r\n"
-                          "Access-Control-Allow-Headers: *" "\r\n"
-                          "Content-Type: text/plain; charset=us-ascii" "\r\n"
-                          "Cache-Control: no-cache" "\r\n"
-                          "Connection: keep-alive" "\r\n"
-                          "X-Content-Type-Options: nosniff" "\r\n"
-                          "\r\n";
+  // The print completed successfully.
+  const char ok_200[] = "HTTP/1.1 200 OK\r\n"
+                        "Access-Control-Allow-Origin: *" "\r\n"
+                        "Access-Control-Allow-Headers: *" "\r\n"
+                        "Content-Type: text/plain; charset=us-ascii" "\r\n"
+                        "Cache-Control: no-cache" "\r\n"
+                        "Connection: keep-alive" "\r\n"
+                        "X-Content-Type-Options: nosniff" "\r\n"
+                        "\r\n";
 }
 
 HttpStatusClient::HttpStatusClient(
@@ -101,6 +101,7 @@ void HttpStatusClient::report_realtime_status() {
     }
     msg << ",\"wco\":[" << report_util_axis_values(get_wco()).c_str() << "]";
     msg << ",\"fro\":[" << int(sys.f_override) << "," << int(sys.r_override) << "," << int(sys.spindle_speed_ovr) << "]";
+    msg << ",\"ram\":" << xPortGetFreeHeapSize();
     msg << "}";
     // The destructor sends the line when msg goes out of scope
 }

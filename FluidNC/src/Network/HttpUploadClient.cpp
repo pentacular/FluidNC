@@ -1,6 +1,8 @@
 #include "../Config.h"
 #include "../Serial.h"
 
+// localfsName or sdName
+
 #define RETRY -1
 
 #include <lwip/sockets.h>
@@ -13,40 +15,35 @@
 #include "HttpUploadClient.h"
 
 namespace {
-    const char* _state_name[] = {
-        "READING_POST_HEADER",
-        "OPENING_FILE",
-        "READING_DATA",
-        "CLOSING_FILE",
-        "WRITING_POST_HEADER",
-        "FINISHING",
-        "FINISHED",
-    };
+  const char* _state_name[] = {
+    "READING_POST_HEADER",
+    "OPENING_FILE",
+    "READING_DATA",
+    "CLOSING_FILE",
+    "WRITING_POST_HEADER",
+    "FINISHING",
+    "FINISHED",
+  };
 
-    const char content_length[] = "Content-Length:";
+  const char kContentLength[] = "Content-Length:";
+  const char kPostPrefix[] = "POST /";
+  const char kHeaderDelimiter[] = "\r\n";
 
-    const char header_delimiter[] = "\r\n";
-
-    // The print completed successfully.
-    const char ok_200[] = "HTTP/1.1 200 OK\r\n"
-                          "Cache-Control: no-cache" "\r\n"
-                          "Connection: Keep-Alive" "\r\n"
-                          "Keep-Alive: timeout=1000, max=1000" "\r\n"
-                          "Content-Length: 0" "\r\n"
-                          "X-Content-Type-Options: nosniff" "\r\n"
-                          "\r\n";
+  // The print completed successfully.
+  const char ok_200[] = "HTTP/1.1 200 OK\r\n"
+                        "Cache-Control: no-cache" "\r\n"
+                        "Connection: Keep-Alive" "\r\n"
+                        "Keep-Alive: timeout=1000, max=1000" "\r\n"
+                        "Content-Length: 0" "\r\n"
+                        "X-Content-Type-Options: nosniff" "\r\n"
+                        "\r\n";
 }
 
-HttpUploadClient::HttpUploadClient(const char *name, WiFiClient wifi_client) :
-    Channel(name),
+HttpUploadClient::HttpUploadClient(const char *name, WiFiClient wifi_client, const std::string& fs) :
     _state(READING_POST_HEADER), _wifi_client(wifi_client), _content_read(0),
-    _content_size(0), _data_read(0), _data_size(0), _aborted(false), _need_ack(false) {
-  allChannels.registration(this);
-}
+    _content_size(0), _data_read(0), _data_size(0), _aborted(false), _filename("sd_upload.gcode"), _fs(fs) {}
 
-HttpUploadClient::~HttpUploadClient() {
-  allChannels.deregistration(this);
-}
+HttpUploadClient::~HttpUploadClient() {}
 
 bool HttpUploadClient::is_done() {
     return _state == FINISHED;
@@ -60,32 +57,9 @@ void HttpUploadClient::set_state(State state) {
     if (_state != state) {
         // Show the state changes so we can see what's happening via other
         // clients.
-        // log_debug("HttpUploadClient/state: " << _state_name[state]);
+        log_debug("HttpUploadClient/state: " << _state_name[state]);
         _state = state;
     }
-}
-
-Channel* HttpUploadClient::pollLine(char* line) {
-    // If line == nullptr this is a reques for realtime data,
-    // which we do not supply.
-    if (!line || need_ack()) {
-        return nullptr;
-    }
-    Channel* channel = Channel::pollLine(line);
-    if (!channel) {
-      return nullptr;
-    }
-    // Block further reads until we ack this line.
-    clear_ack();
-    return channel;
-}
-
-void HttpUploadClient::ack(Error status) {
-    if (status != Error::Ok) {
-        log_debug("Ack error: aborting");
-        abort();
-    }
-    set_ack();
 }
 
 void HttpUploadClient::abort() {
@@ -117,11 +91,19 @@ void HttpUploadClient::handle() {
         }
         if (code == '\n') {
           // We have a complete line.
-          if (strncmp(_data, content_length, sizeof content_length - 1) == 0) {
+          if (strncmp(_data, kPostPrefix, sizeof kPostPrefix - 1) == 0) {
+            // POST /[filename] HTTP/1.1
+            char *start = &_data[sizeof kPostPrefix - 1];
+            char *end = strchr(start, ' ');
+            _filename = std::string(start, end - start);
+            log_debug("HttpUploadClient: filename=" << _filename);
+          } else if (strncmp(_data, kContentLength, sizeof kContentLength - 1) == 0) {
             // Content-Length: 1234
-            _content_size = atol(_data + sizeof content_length);
-          } else if (strncmp(_data, header_delimiter, sizeof header_delimiter - 1) == 0) {
-            set_state(READING_DATA);
+            _content_size = atol(_data + sizeof kContentLength);
+            log_debug("HttpUploadClient: _content_size=" << (int)_content_size);
+          } else if (strncmp(_data, kHeaderDelimiter, sizeof kHeaderDelimiter - 1) == 0) {
+            set_state(OPENING_FILE);
+            return;
           }
           reset_data();
         }
@@ -129,33 +111,43 @@ void HttpUploadClient::handle() {
       return;
     }
     case OPENING_FILE: {
+      log_debug("Opening File/1: ram=" << xPortGetFreeHeapSize());
       std::error_code ec;
-      _fpath = FluidPath( _filename, _fs, ec);
+      // Why does this use up about 12k of ram?
+      _fpath = FluidPath( _filename.c_str(), _fs.c_str(), ec);
       if (ec) {
         log_debug("HttpUploadClient: Cannot create path");
         abort();
         return;
       }
 
-      auto space = stdfs::space(fpath);
-      if (filesize && filesize > space.available) {
+      log_debug("Opening File/2: ram=" << xPortGetFreeHeapSize());
+      auto space = stdfs::space(_fpath);
+      log_debug("Opening File/2a: ram=" << xPortGetFreeHeapSize());
+      if (_content_size && _content_size > space.available) {
+        log_debug("Opening File/2b: ram=" << xPortGetFreeHeapSize());
         // If the file already exists, maybe there will be enough space
         // when we replace it.
-        auto existing_size = stdfs::file_size(fpath, ec);
-        if (ec || (filesize > (space.available + existing_size))) {
+        auto existing_size = stdfs::file_size(_fpath, ec);
+        if (ec || (_content_size > (space.available + existing_size))) {
           log_debug("HttpUploadClient: Insufficient space");
           abort();
           return;
         }
+        log_debug("Opening File/2c: ram=" << xPortGetFreeHeapSize());
       }
 
+      log_debug("Opening File/3: ram=" << xPortGetFreeHeapSize());
       try {
-        _uploadFile = std::make_unique<FileStream>(fpath, "w");
+        _uploadFile = std::make_unique<FileStream>(_fpath, "w");
       } catch (const Error err) {
         _uploadFile.reset();
         abort();
         return;
       }
+      log_debug("Opening File/4: ram=" << xPortGetFreeHeapSize());
+      set_state(READING_DATA);
+      return;
     }
     case READING_DATA: {
       // Should support multipart.
@@ -168,12 +160,13 @@ void HttpUploadClient::handle() {
           available = sizeof _data;
         }
         _data_size = _wifi_client.readBytes(_data, available);
-        if (_uploadFile->write(_data, _data_size) != _data_size) {
+        log_debug("ram=" << xPortGetFreeHeapSize());
+        if (_uploadFile->write((uint8_t*)_data, _data_size) != _data_size) {
           log_debug("Partial file write");
           abort();
         }
         _content_read += _data_size;
-        if (is_content_exhausted) {
+        if (is_content_exhausted()) {
           log_debug("HttpUploadClient: upload finished");
           set_state(CLOSING_FILE);
           return;

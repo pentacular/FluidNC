@@ -23,12 +23,13 @@ class HttpServer : public Configuration::Configurable {
   };
 
  public:
-  HttpServer() : _state(UNSTARTED), _port(0) {}
+  HttpServer() : _state(UNSTARTED), _filesystem(""), _port(0), _report_period_ms(0) {}
 
   bool begin() {
     if (_state != UNSTARTED || _port == 0) {
       return false;
     }
+    log_debug(name() << "/begin: port=" << (int)_port);
     _server = WiFiServer(_port);
     _server.begin();
     set_state(IDLE);
@@ -39,6 +40,7 @@ class HttpServer : public Configuration::Configurable {
     if (_state == STOPPED) {
         return;
     }
+    log_debug(name() << "/stop: port=" << (int)_port);
     _server.stop();
     set_state(STOPPED);
   }
@@ -81,8 +83,10 @@ class HttpServer : public Configuration::Configurable {
   void init() { begin(); }
 
   void group(Configuration::HandlerBase& handler) {
+    handler.item("filesystem", _filesystem);
     handler.item("port", _port);
     handler.item("report_period_ms", _report_period_ms);
+    log_debug("HttpServer: filesystem=" << _filesystem << " port=" << _port << " report_period_ms=" << _report_period_ms);
   }
 
   std::unique_ptr<HttpClient> make_client();
@@ -95,6 +99,7 @@ class HttpServer : public Configuration::Configurable {
   }
 
   enum State      _state;
+  std::string     _filesystem;
   int             _port;
   uint32_t        _report_period_ms;
   WiFiServer      _server;

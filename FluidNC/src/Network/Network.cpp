@@ -9,11 +9,17 @@ void Network::init() {
     if (_http_batch_server) {
         _http_batch_server->init();
     }
+    if (_http_localfs_upload_server) {
+        _http_localfs_upload_server->init();
+    }
     if (_http_log_server) {
         _http_log_server->init();
     }
     if (_http_realtime_server) {
         _http_realtime_server->init();
+    }
+    if (_http_sd_upload_server) {
+        _http_sd_upload_server->init();
     }
     if (_http_status_server) {
         _http_status_server->init();
@@ -24,11 +30,17 @@ void Network::handle() {
     if (_http_batch_server) {
         _http_batch_server->handle();
     }
+    if (_http_localfs_upload_server) {
+        _http_localfs_upload_server->handle();
+    }
     if (_http_log_server) {
         _http_log_server->handle();
     }
     if (_http_realtime_server) {
         _http_realtime_server->handle();
+    }
+    if (_http_sd_upload_server) {
+        _http_sd_upload_server->handle();
     }
     if (_http_status_server) {
         _http_status_server->handle();
@@ -41,7 +53,9 @@ const char* Network::name() const {
 
 void Network::group(Configuration::HandlerBase& handler) {
     handler.section("http_batch_server", _http_batch_server);
+    handler.section("http_localfs_upload_server", _http_localfs_upload_server);
     handler.section("http_log_server", _http_log_server);
+    handler.section("http_sd_upload_server", _http_sd_upload_server);
     handler.section("http_status_server", _http_status_server);
     handler.section("http_realtime_server", _http_realtime_server);
 }
@@ -53,6 +67,11 @@ void Network::afterParse() {
 template<>
 const char* HttpServer<HttpBatchClient>::name() const {
   return "HttpBatchServer";
+}
+
+template<>
+const char* HttpServer<HttpUploadClient>::name() const {
+  return "HttpUploadServer";
 }
 
 template<>
@@ -73,6 +92,11 @@ const char* HttpServer<HttpStatusClient>::name() const {
 template<>
 std::unique_ptr<HttpBatchClient> HttpServer<HttpBatchClient>::make_client() {
   return std::make_unique<HttpBatchClient>("HttpBatchClient", _server.available());
+}
+
+template<>
+std::unique_ptr<HttpUploadClient> HttpServer<HttpUploadClient>::make_client() {
+  return std::make_unique<HttpUploadClient>("HttpUploadClient", _server.available(), _filesystem);
 }
 
 template<>
