@@ -3,19 +3,21 @@
 
 #define RETRY -1
 
-#    include <lwip/sockets.h>
+#include <lwip/sockets.h>
 
 // A workaround for an issue in lwip/sockets.h
 // See https://github.com/espressif/arduino-esp32/issues/4073
-#    undef IPADDR_NONE
+#undef IPADDR_NONE
 
-#    include "../System.h"
-#    include "HttpBatchClient.h"
+#include "../System.h"
+#include "HttpUploadClient.h"
 
 namespace {
     const char* _state_name[] = {
         "READING_POST_HEADER",
+        "OPENING_FILE",
         "READING_DATA",
+        "CLOSING_FILE",
         "WRITING_POST_HEADER",
         "FINISHING",
         "FINISHED",
@@ -27,9 +29,6 @@ namespace {
 
     // The print completed successfully.
     const char ok_200[] = "HTTP/1.1 200 OK\r\n"
-                          // "Access-Control-Allow-Origin: *" "\r\n"
-                          // "Access-Control-Allow-Headers: *" "\r\n"
-                          // "Content-Type: text/plain; charset=us-ascii" "\r\n"
                           "Cache-Control: no-cache" "\r\n"
                           "Connection: Keep-Alive" "\r\n"
                           "Keep-Alive: timeout=1000, max=1000" "\r\n"
@@ -38,47 +37,35 @@ namespace {
                           "\r\n";
 }
 
-HttpBatchClient::HttpBatchClient(const char *name, WiFiClient wifi_client) :
+HttpUploadClient::HttpUploadClient(const char *name, WiFiClient wifi_client) :
     Channel(name),
     _state(READING_POST_HEADER), _wifi_client(wifi_client), _content_read(0),
     _content_size(0), _data_read(0), _data_size(0), _aborted(false), _need_ack(false) {
   allChannels.registration(this);
 }
 
-HttpBatchClient::~HttpBatchClient() {
+HttpUploadClient::~HttpUploadClient() {
   allChannels.deregistration(this);
 }
 
-bool HttpBatchClient::is_done() {
+bool HttpUploadClient::is_done() {
     return _state == FINISHED;
 }
 
-bool HttpBatchClient::is_aborted() {
+bool HttpUploadClient::is_aborted() {
     return _aborted;
 }
 
-void HttpBatchClient::clear_ack() {
-  _need_ack = true;
-}
-
-void HttpBatchClient::set_ack() {
-  _need_ack = false;
-}
-
-bool HttpBatchClient::need_ack() {
-  return _need_ack;
-}
-
-void HttpBatchClient::set_state(State state) {
+void HttpUploadClient::set_state(State state) {
     if (_state != state) {
         // Show the state changes so we can see what's happening via other
         // clients.
-        // log_debug("HttpBatchClient/state: " << _state_name[state]);
+        // log_debug("HttpUploadClient/state: " << _state_name[state]);
         _state = state;
     }
 }
 
-Channel* HttpBatchClient::pollLine(char* line) {
+Channel* HttpUploadClient::pollLine(char* line) {
     // If line == nullptr this is a reques for realtime data,
     // which we do not supply.
     if (!line || need_ack()) {
@@ -93,7 +80,7 @@ Channel* HttpBatchClient::pollLine(char* line) {
     return channel;
 }
 
-void HttpBatchClient::ack(Error status) {
+void HttpUploadClient::ack(Error status) {
     if (status != Error::Ok) {
         log_debug("Ack error: aborting");
         abort();
@@ -101,70 +88,28 @@ void HttpBatchClient::ack(Error status) {
     set_ack();
 }
 
-void HttpBatchClient::abort() {
+void HttpUploadClient::abort() {
   _aborted = true;
   done();
 }
 
-void HttpBatchClient::done() {
+void HttpUploadClient::done() {
   set_state(FINISHING);
 }
 
-void HttpBatchClient::advance() {
+void HttpUploadClient::advance() {
   _data_read++;
   _content_read++;
 }
 
-void HttpBatchClient::handle() {
-    switch(_state) {
-        case WRITING_POST_HEADER: {
-          // Send response headers (assuming this will fit in buffers).
-          if (_wifi_client.write(ok_200, (sizeof ok_200) - 1) != (sizeof ok_200) - 1) {
-            log_debug("HttpBatchClient post header truncated");
-          }
-          set_state(READING_POST_HEADER);
-          return;
-        }
-        case FINISHING: {
-            if (need_ack()) {
-              return;
-            }
-            shutdown(_wifi_client.fd(), SHUT_RDWR);
-            set_state(FINISHED);
-            return;
-        }
-        case READING_DATA:
-        case FINISHED:
-        case READING_POST_HEADER:
-            return;
-    }
-}
-
-int HttpBatchClient::direct_read() {
-    if (is_data_exhausted()) {
-        // The header line was too long, throw away the start.
-        reset_data();
-    }
-    int code = _wifi_client.read();
-    if (code == RETRY) {
-        return code;
-    }
-    _data[_data_size++] = code;
-    return code;
-}
-
-int HttpBatchClient::read() {
-  switch (_state) {
-    case FINISHED:
-      return RETRY;
-    case FINISHING:
-      return RETRY;
+void HttpUploadClient::handle() {
+  switch(_state) {
     case READING_POST_HEADER: {
       do {
         if (!_wifi_client.connected() && !_wifi_client.available()) {
           // Breaking off while reading the header is safe.
           done();
-          return RETRY;
+          return;
         }
         int code = direct_read();
         if (code == RETRY) {
@@ -181,34 +126,98 @@ int HttpBatchClient::read() {
           reset_data();
         }
       } while (_wifi_client.available() > 0);
-      return RETRY;
+      return;
+    }
+    case OPENING_FILE: {
+      std::error_code ec;
+      _fpath = FluidPath( _filename, _fs, ec);
+      if (ec) {
+        log_debug("HttpUploadClient: Cannot create path");
+        abort();
+        return;
+      }
+
+      auto space = stdfs::space(fpath);
+      if (filesize && filesize > space.available) {
+        // If the file already exists, maybe there will be enough space
+        // when we replace it.
+        auto existing_size = stdfs::file_size(fpath, ec);
+        if (ec || (filesize > (space.available + existing_size))) {
+          log_debug("HttpUploadClient: Insufficient space");
+          abort();
+          return;
+        }
+      }
+
+      try {
+        _uploadFile = std::make_unique<FileStream>(fpath, "w");
+      } catch (const Error err) {
+        _uploadFile.reset();
+        abort();
+        return;
+      }
     }
     case READING_DATA: {
-      if (need_ack()) {
-        return RETRY;
-      }
-      if (is_content_exhausted()) {
-        // No more to read.
-        if (!need_ack()) {
-          // Wait for the next chunk.
-          set_state(WRITING_POST_HEADER);
+      // Should support multipart.
+      for (;;) {
+        size_t available = _wifi_client.available();
+        if (available == 0) {
+          return;
         }
-        return RETRY;
+        if (available > sizeof _data) {
+          available = sizeof _data;
+        }
+        _data_size = _wifi_client.readBytes(_data, available);
+        if (_uploadFile->write(_data, _data_size) != _data_size) {
+          log_debug("Partial file write");
+          abort();
+        }
+        _content_read += _data_size;
+        if (is_content_exhausted) {
+          log_debug("HttpUploadClient: upload finished");
+          set_state(CLOSING_FILE);
+          return;
+        }
       }
-      int code = peek();
-      if (code == RETRY) {
-        return code;
+    }
+    case CLOSING_FILE: {
+      set_state(WRITING_POST_HEADER);
+      return;
+    }
+    case WRITING_POST_HEADER: {
+      // Send response headers (assuming this will fit in buffers).
+      if (_wifi_client.write(ok_200, (sizeof ok_200) - 1) != (sizeof ok_200) - 1) {
+        log_debug("HttpUploadClient post header truncated");
       }
-      // log_debug("read=" << (char)code);
-      advance();
-      return code;
+      set_state(FINISHING);
+      return;
+    }
+    case FINISHING: {
+      shutdown(_wifi_client.fd(), SHUT_RDWR);
+      set_state(FINISHED);
+      return;
+    }
+    case FINISHED: {
+      return;
     }
   }
-  // Unreachable
-  return RETRY;
 }
 
-int HttpBatchClient::peek() {
+int HttpUploadClient::direct_read() {
+    if (is_data_exhausted()) {
+        // The header line was too long, throw away the start.
+        reset_data();
+    }
+    int code = _wifi_client.read();
+    if (code == RETRY) {
+        return code;
+    }
+    _data[_data_size++] = code;
+    return code;
+}
+
+#if 0
+int HttpUploadClient::peek() {
     if (_state != READING_DATA) {
         return RETRY;
     }
@@ -232,20 +241,21 @@ int HttpBatchClient::peek() {
     return _data[_data_read];
 }
 
-void HttpBatchClient::flush() {
+void HttpUploadClient::flush() {
     if (_state != READING_DATA) {
         return;
     }
     _wifi_client.flush();
 }
 
-int HttpBatchClient::available() {
+int HttpUploadClient::available() {
     if (_state != READING_DATA) {
         return 0;
     }
     return _wifi_client.available();
 }
 
-size_t HttpBatchClient::write(uint8_t) {
+size_t HttpUploadClient::write(uint8_t) {
     return 0;
 }
+#endif
