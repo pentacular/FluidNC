@@ -114,13 +114,22 @@ void HttpUploadClient::handle() {
       log_debug("Opening File/1: ram=" << xPortGetFreeHeapSize());
       std::error_code ec;
       // Why does this use up about 12k of ram?
-      _fpath = FluidPath( _filename.c_str(), _fs.c_str(), ec);
+      if (_fs == "localfs") {
+        _fpath = FluidPath( _filename.c_str(), localfsName, ec);
+      } else if (_fs == "sd") {
+        _fpath = FluidPath( _filename.c_str(), sdName, ec);
+      } else {
+        log_debug("Unknown filesystem: " << _fs);
+        abort();
+        return;
+      }
       if (ec) {
         log_debug("HttpUploadClient: Cannot create path");
         abort();
         return;
       }
 
+#if 0
       log_debug("Opening File/2: ram=" << xPortGetFreeHeapSize());
       auto space = stdfs::space(_fpath);
       log_debug("Opening File/2a: ram=" << xPortGetFreeHeapSize());
@@ -136,6 +145,7 @@ void HttpUploadClient::handle() {
         }
         log_debug("Opening File/2c: ram=" << xPortGetFreeHeapSize());
       }
+#endif
 
       log_debug("Opening File/3: ram=" << xPortGetFreeHeapSize());
       try {
