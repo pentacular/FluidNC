@@ -42,7 +42,8 @@ HttpStatusClient::HttpStatusClient(
     const char *name, WiFiClient wifi_client, uint32_t report_period_ms) :
     Channel(name), _state(WRITING_HEADER), _wifi_client(wifi_client),
     _report_period_ms(report_period_ms),
-    _report_next_tick(usToEndTicks(_report_period_ms * 1000))
+    _report_next_tick(usToEndTicks(_report_period_ms * 1000)),
+    _last_status("")
     {}
 
 void HttpStatusClient::done() {
@@ -60,16 +61,19 @@ void HttpStatusClient::set_state(State state) {
 }
 
 void HttpStatusClient::report_realtime_status() {
-    LogStream msg(*this, "{");
+  std::string status;
+  {
+    std::ostringstream msg;
 
+    msg << "{";
     msg << "\"state\":\"" << state_name() << "\"";
 
     // Report position
     float* print_position = get_mpos();
-    msg << ",\"machine_position\":[" << report_util_axis_values(print_position).c_str() << "]";
+    msg << ",\"machine_position\":[" << report_util_axis_values(print_position) << "]";
 
     mpos_to_wpos(print_position);
-    msg << ",\"work_position\":[" << report_util_axis_values(print_position).c_str() << "]";
+    msg << ",\"work_position\":[" << report_util_axis_values(print_position) << "]";
 
     plan_block_t* cur_block = plan_get_current_block();
     if (cur_block == NULL) {
@@ -84,7 +88,7 @@ void HttpStatusClient::report_realtime_status() {
     if (config->_reportInches) {
         rate /= MM_PER_INCH;
     }
-    msg << ",\"rate\":" << setprecision(0) << rate;
+    msg << ",\"rate\":" << (int)rate;
     switch (spindle->get_state()) {
       case SpindleState::Disable:
         msg << ",\"speed\":0";
@@ -103,7 +107,14 @@ void HttpStatusClient::report_realtime_status() {
     msg << ",\"fro\":[" << int(sys.f_override) << "," << int(sys.r_override) << "," << int(sys.spindle_speed_ovr) << "]";
     msg << ",\"ram\":" << xPortGetFreeHeapSize();
     msg << "}";
-    // The destructor sends the line when msg goes out of scope
+
+    status = msg.str();
+  }
+
+  if (status != _last_status) {
+    _wifi_client.write(status.c_str(), status.size());
+    _last_status = std::move(status);
+  }
 }
 
 void HttpStatusClient::handle() {

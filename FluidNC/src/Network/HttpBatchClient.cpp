@@ -70,27 +70,30 @@ bool HttpBatchClient::need_ack() {
 }
 
 void HttpBatchClient::set_state(State state) {
-    if (_state != state) {
-        // Show the state changes so we can see what's happening via other
-        // clients.
-        // log_debug("HttpBatchClient/state: " << _state_name[state]);
-        _state = state;
-    }
+  if (_state != state) {
+    // Show the state changes so we can see what's happening via other
+    // clients.
+    // log_debug("HttpBatchClient/state: " << _state_name[state]);
+    _state = state;
+  }
 }
 
 Channel* HttpBatchClient::pollLine(char* line) {
-    // If line == nullptr this is a reques for realtime data,
-    // which we do not supply.
-    if (!line || need_ack()) {
-        return nullptr;
-    }
-    Channel* channel = Channel::pollLine(line);
-    if (!channel) {
-      return nullptr;
-    }
-    // Block further reads until we ack this line.
-    clear_ack();
-    return channel;
+  // If line == nullptr this is a reques for realtime data,
+  // which we do not supply.
+  if (!line) {
+    return nullptr;
+  }
+  if (need_ack()) {
+    return nullptr;
+  }
+  Channel* channel = Channel::pollLine(line);
+  if (!channel) {
+    return nullptr;
+  }
+  // Block further reads until we ack this line.
+  clear_ack();
+  return channel;
 }
 
 void HttpBatchClient::ack(Error status) {
@@ -160,15 +163,17 @@ int HttpBatchClient::read() {
     case FINISHING:
       return RETRY;
     case READING_POST_HEADER: {
-      do {
-        if (!_wifi_client.connected() && !_wifi_client.available()) {
-          // Breaking off while reading the header is safe.
-          done();
+      for (;;) {
+        if (!_wifi_client.available()) {
+          if (!_wifi_client.connected()) {
+            // Breaking off while reading the header is safe.
+            done();
+          }
           return RETRY;
         }
         int code = direct_read();
         if (code == RETRY) {
-            continue;
+          continue;
         }
         if (code == '\n') {
           // We have a complete line.
@@ -176,12 +181,13 @@ int HttpBatchClient::read() {
             // Content-Length: 1234
             _content_size = atol(_data + sizeof content_length);
           } else if (strncmp(_data, header_delimiter, sizeof header_delimiter - 1) == 0) {
+            reset_data();
             set_state(READING_DATA);
+            return RETRY;
           }
           reset_data();
         }
-      } while (_wifi_client.available() > 0);
-      return RETRY;
+      }
     }
     case READING_DATA: {
       if (need_ack()) {
@@ -199,7 +205,6 @@ int HttpBatchClient::read() {
       if (code == RETRY) {
         return code;
       }
-      // log_debug("read=" << (char)code);
       advance();
       return code;
     }
@@ -209,27 +214,27 @@ int HttpBatchClient::read() {
 }
 
 int HttpBatchClient::peek() {
-    if (_state != READING_DATA) {
-        return RETRY;
+  if (_state != READING_DATA) {
+    return RETRY;
+  }
+  if (is_data_exhausted()) {
+    size_t available = _wifi_client.available();
+    if (available == 0) {
+      if (!_wifi_client.connected()) {
+        // There is nothing to read and we are not connected.
+        _wifi_client.stop();
+        abort();
+      }
+      return RETRY;
     }
-    if (is_data_exhausted()) {
-        size_t available = _wifi_client.available();
-        if (available == 0) {
-            if (!_wifi_client.connected()) {
-                // There is nothing to read and we are not connected.
-                _wifi_client.stop();
-                abort();
-            }
-            return RETRY;
-        }
-        _data_read = 0;
-        if (available < sizeof _data) {
-          _data_size = _wifi_client.readBytes(_data, available);
-        } else {
-          _data_size = _wifi_client.readBytes(_data, sizeof _data);
-        }
+    _data_read = 0;
+    if (available < sizeof _data) {
+      _data_size = _wifi_client.readBytes(_data, available);
+    } else {
+      _data_size = _wifi_client.readBytes(_data, sizeof _data);
     }
-    return _data[_data_read];
+  }
+  return _data[_data_read];
 }
 
 void HttpBatchClient::flush() {

@@ -40,6 +40,7 @@ private:
     void set_state(State state);
     int32_t _report_period_ms;
     int32_t _report_next_tick;
+    std::string _last_status;
     enum State _state;
     WiFiClient _wifi_client;
 };

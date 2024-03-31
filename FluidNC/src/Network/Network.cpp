@@ -6,62 +6,62 @@
 #include "../Logging.h"
 
 void Network::init() {
-    if (_http_batch_server) {
-        _http_batch_server->init();
-    }
-    if (_http_localfs_upload_server) {
-        _http_localfs_upload_server->init();
-    }
-    if (_http_log_server) {
-        _http_log_server->init();
-    }
-    if (_http_realtime_server) {
-        _http_realtime_server->init();
-    }
-    if (_http_sd_upload_server) {
-        _http_sd_upload_server->init();
-    }
-    if (_http_status_server) {
-        _http_status_server->init();
-    }
+  if (_http_batch_server) {
+    _http_batch_server->init();
+  }
+  if (_http_localfs_upload_server) {
+    _http_localfs_upload_server->init();
+  }
+  if (_http_log_server) {
+    _http_log_server->init();
+  }
+  if (_http_realtime_server) {
+    _http_realtime_server->init();
+  }
+  if (_http_sd_upload_server) {
+    _http_sd_upload_server->init();
+  }
+  if (_http_status_server) {
+    _http_status_server->init();
+  }
 }
 
 void Network::handle() {
-    if (_http_batch_server) {
-        _http_batch_server->handle();
-    }
-    if (_http_localfs_upload_server) {
-        _http_localfs_upload_server->handle();
-    }
-    if (_http_log_server) {
-        _http_log_server->handle();
-    }
-    if (_http_realtime_server) {
-        _http_realtime_server->handle();
-    }
-    if (_http_sd_upload_server) {
-        _http_sd_upload_server->handle();
-    }
-    if (_http_status_server) {
-        _http_status_server->handle();
-    }
+  if (_http_batch_server) {
+    _http_batch_server->handle();
+  }
+  if (_http_localfs_upload_server) {
+    _http_localfs_upload_server->handle();
+  }
+  if (_http_log_server) {
+    _http_log_server->handle();
+  }
+  if (_http_realtime_server) {
+    _http_realtime_server->handle();
+  }
+  if (_http_sd_upload_server) {
+    _http_sd_upload_server->handle();
+  }
+  if (_http_status_server) {
+    _http_status_server->handle();
+  }
 }
 
 const char* Network::name() const {
-    return "network";
+  return "network";
 }
 
 void Network::group(Configuration::HandlerBase& handler) {
-    handler.section("http_batch_server", _http_batch_server);
-    handler.section("http_localfs_upload_server", _http_localfs_upload_server);
-    handler.section("http_log_server", _http_log_server);
-    handler.section("http_sd_upload_server", _http_sd_upload_server);
-    handler.section("http_status_server", _http_status_server);
-    handler.section("http_realtime_server", _http_realtime_server);
+  handler.section("http_batch_server", _http_batch_server);
+  handler.section("http_localfs_upload_server", _http_localfs_upload_server);
+  handler.section("http_log_server", _http_log_server);
+  handler.section("http_sd_upload_server", _http_sd_upload_server);
+  handler.section("http_status_server", _http_status_server);
+  handler.section("http_realtime_server", _http_realtime_server);
 }
 
 void Network::afterParse() {
-    // Do nothing.
+  // Do nothing.
 }
 
 template<>
